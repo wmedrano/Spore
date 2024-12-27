@@ -1,3 +1,4 @@
+use bumpalo::Bump;
 use compact_str::CompactString;
 
 use crate::{
@@ -11,6 +12,7 @@ pub struct Vm {
     globals: Module,
     stack: Vec<Val>,
     stack_frames: Vec<StackFrame>,
+    compile_arena: Bump,
     objects: Objects,
 }
 
@@ -37,6 +39,7 @@ impl Vm {
             globals: Module::new(),
             stack: Vec::with_capacity(4096),
             stack_frames: Vec::with_capacity(128),
+            compile_arena: Bump::new(),
             objects: Objects {
                 native_functions: ObjectStore::default(),
                 bytecode_functions: ObjectStore::default(),
@@ -68,7 +71,8 @@ impl Vm {
 
 impl Vm {
     pub fn eval_str(&mut self, s: &str) -> Val {
-        let bytecode = ByteCodeFunction::with_str(s);
+        let bytecode = ByteCodeFunction::with_str(&self.compile_arena, s);
+        self.compile_arena.reset();
         self.eval(bytecode)
     }
 

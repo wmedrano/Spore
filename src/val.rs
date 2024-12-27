@@ -1,8 +1,6 @@
-use std::rc::Rc;
-
 use bumpalo::Bump;
 
-use crate::{compiler::compile, instruction::Instruction, object_store::ObjectId};
+use crate::{compiler::compile, instruction::Instruction, object_store::ObjectId, SporeRc};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Val {
@@ -13,7 +11,7 @@ pub enum Val {
     BytecodeFunction(ObjectId<ByteCodeFunction>),
 }
 
-type RcNativeFunction = Rc<dyn Fn(&[Val]) -> Val>;
+type RcNativeFunction = SporeRc<dyn Fn(&[Val]) -> Val>;
 
 #[derive(Clone)]
 pub struct NativeFunction {
@@ -22,7 +20,7 @@ pub struct NativeFunction {
 
 impl NativeFunction {
     pub fn new(f: impl 'static + Fn(&[Val]) -> Val) -> NativeFunction {
-        NativeFunction { f: Rc::new(f) }
+        NativeFunction { f: SporeRc::new(f) }
     }
 
     pub fn call(&self, args: &[Val]) -> Val {
@@ -38,19 +36,18 @@ impl std::fmt::Debug for NativeFunction {
 
 impl PartialEq for NativeFunction {
     fn eq(&self, other: &Self) -> bool {
-        std::ptr::addr_eq(Rc::as_ptr(&self.f), Rc::as_ptr(&other.f))
+        std::ptr::addr_eq(SporeRc::as_ptr(&self.f), SporeRc::as_ptr(&other.f))
     }
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ByteCodeFunction {
-    pub instructions: Vec<Instruction>,
+    pub instructions: SporeRc<[Instruction]>,
     pub args: usize,
 }
 
 impl ByteCodeFunction {
-    pub fn with_str(s: &str) -> ByteCodeFunction {
-        let arena = Bump::new();
+    pub fn with_str(arena: &Bump, s: &str) -> ByteCodeFunction {
         let instructions = compile(&arena, s);
         ByteCodeFunction {
             instructions,
