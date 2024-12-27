@@ -2,29 +2,31 @@ use std::rc::Rc;
 
 use bumpalo::Bump;
 
-use crate::{compiler::compile, instruction::Instruction};
+use crate::{compiler::compile, instruction::Instruction, object_store::ObjectId};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Val {
     Void,
     Int(i64),
     Float(f64),
-    NativeFunction(NativeFunction),
-    BytecodeFunction(ByteCodeFunction),
+    NativeFunction(ObjectId<NativeFunction>),
+    BytecodeFunction(ObjectId<ByteCodeFunction>),
 }
 
 type RcNativeFunction = Rc<dyn Fn(&[Val]) -> Val>;
 
 #[derive(Clone)]
-pub struct NativeFunction(RcNativeFunction);
+pub struct NativeFunction {
+    f: RcNativeFunction,
+}
 
 impl NativeFunction {
     pub fn new(f: impl 'static + Fn(&[Val]) -> Val) -> NativeFunction {
-        NativeFunction(Rc::new(f))
+        NativeFunction { f: Rc::new(f) }
     }
 
     pub fn call(&self, args: &[Val]) -> Val {
-        (self.0)(args)
+        (self.f)(args)
     }
 }
 
@@ -36,7 +38,7 @@ impl std::fmt::Debug for NativeFunction {
 
 impl PartialEq for NativeFunction {
     fn eq(&self, other: &Self) -> bool {
-        std::ptr::addr_eq(Rc::as_ptr(&self.0), Rc::as_ptr(&other.0))
+        std::ptr::addr_eq(Rc::as_ptr(&self.f), Rc::as_ptr(&other.f))
     }
 }
 

@@ -1,10 +1,9 @@
-use std::collections::HashMap;
-
 use compact_str::CompactString;
 
 use crate::{
     instruction::Instruction,
     module::Module,
+    object_store::ObjectStore,
     val::{ByteCodeFunction, NativeFunction, Val},
 };
 
@@ -12,6 +11,12 @@ pub struct Vm {
     globals: Module,
     stack: Vec<Val>,
     stack_frames: Vec<StackFrame>,
+    objects: Objects,
+}
+
+struct Objects {
+    native_functions: ObjectStore<NativeFunction>,
+    bytecode_functions: ObjectStore<ByteCodeFunction>,
 }
 
 struct StackFrame {
@@ -22,22 +27,23 @@ struct StackFrame {
 
 impl Default for Vm {
     fn default() -> Self {
-        Vm {
-            globals: Module {
-                symbols: HashMap::from_iter([(
-                    CompactString::new("+"),
-                    Val::NativeFunction(NativeFunction::new(plus)),
-                )]),
-            },
-            stack: Vec::with_capacity(4096),
-            stack_frames: Vec::with_capacity(128),
-        }
+        Vm::new()
     }
 }
 
 impl Vm {
     pub fn new() -> Vm {
-        Vm::default()
+        let mut vm = Vm {
+            globals: Module::new(),
+            stack: Vec::with_capacity(4096),
+            stack_frames: Vec::with_capacity(128),
+            objects: Objects {
+                native_functions: ObjectStore::default(),
+                bytecode_functions: ObjectStore::default(),
+            },
+        };
+        vm.register_function("+", plus);
+        vm
     }
 
     pub fn register_function(
@@ -49,10 +55,13 @@ impl Vm {
             !self.globals.symbols.contains_key(name),
             "register_function called with existing function named {name}."
         );
-        self.globals.symbols.insert(
-            CompactString::new(name),
-            Val::NativeFunction(NativeFunction::new(f)),
-        );
+        let id = self
+            .objects
+            .native_functions
+            .register(NativeFunction::new(f));
+        self.globals
+            .symbols
+            .insert(CompactString::new(name), Val::NativeFunction(id));
         self
     }
 }
@@ -120,7 +129,12 @@ impl Vm {
         match function {
             Val::NativeFunction(native_function) => {
                 let args = &self.stack[stack_start..];
-                let ret = native_function.call(args);
+                let ret = self
+                    .objects
+                    .native_functions
+                    .get(native_function)
+                    .unwrap()
+                    .call(args);
                 self.stack.truncate(stack_start);
                 *self.stack.last_mut().unwrap() = ret;
             }
@@ -128,7 +142,12 @@ impl Vm {
                 let stack_frame = StackFrame {
                     stack_start,
                     bytecode_idx: 0,
-                    function: bytecode_function.clone(),
+                    function: self
+                        .objects
+                        .bytecode_functions
+                        .get(bytecode_function)
+                        .unwrap()
+                        .clone(),
                 };
                 self.stack_frames.push(stack_frame);
             }
