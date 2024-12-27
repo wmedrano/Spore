@@ -1,7 +1,13 @@
+use ast::Ast;
 use bumpalo::Bump;
 use compact_str::CompactString;
+use tokenizer::Token;
 
-use crate::{ast::Ast, instruction::Instruction, tokenizer::Token, val::Val};
+use crate::{instruction::Instruction, val::Val};
+
+pub mod ast;
+pub mod span;
+pub mod tokenizer;
 
 type BumpVec<'a, T> = bumpalo::collections::Vec<'a, T>;
 

@@ -1,4 +1,7 @@
-use crate::tokenizer::{tokenize, Span, Token, TokenType};
+use super::{
+    span::Span,
+    tokenizer::{tokenize, Token, TokenType},
+};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Ast {
