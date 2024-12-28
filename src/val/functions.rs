@@ -43,7 +43,7 @@ impl PartialEq for NativeFunction {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct ByteCodeFunction {
     pub instructions: SporeRc<[Instruction]>,
     pub args: usize,

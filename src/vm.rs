@@ -24,6 +24,7 @@ struct Objects {
     native_functions: TypedObjectStore<NativeFunction>,
     bytecode_functions: TypedObjectStore<ByteCodeFunction>,
     symbols: SymbolTable,
+    null_bytecode: ByteCodeFunction,
 }
 
 struct StackFrame {
@@ -34,12 +35,6 @@ struct StackFrame {
 
 impl Default for Vm {
     fn default() -> Self {
-        Vm::new()
-    }
-}
-
-impl Vm {
-    pub fn new() -> Vm {
         let mut vm = Vm {
             globals: Module::new(),
             stack: Vec::with_capacity(4096),
@@ -50,7 +45,9 @@ impl Vm {
         vm.register_function("+", plus);
         vm
     }
+}
 
+impl Vm {
     pub fn register_function(
         &mut self,
         name: &str,
@@ -143,6 +140,11 @@ impl Vm {
         let function = self.stack[function_idx].clone();
         match function {
             Val::NativeFunction(native_function) => {
+                self.stack_frames.push(StackFrame {
+                    stack_start,
+                    bytecode_idx: 0,
+                    function: self.objects.null_bytecode.clone(),
+                });
                 let ret = self
                     .objects
                     .native_functions
@@ -151,6 +153,7 @@ impl Vm {
                     .call(self);
                 self.stack.truncate(stack_start);
                 *self.stack.last_mut().unwrap() = ret;
+                self.stack_frames.pop();
             }
             Val::BytecodeFunction(bytecode_function) => {
                 let stack_frame = StackFrame {
@@ -177,7 +180,7 @@ fn plus(args: &[Val]) -> Val {
         match arg {
             Val::Int(x) => int_sum += *x,
             Val::Float(x) => float_sum += *x,
-            _ => todo!(),
+            v => todo!("{v:?} not handled in + operator"),
         }
     }
     if float_sum == 0.0 {
@@ -193,6 +196,6 @@ mod tests {
 
     #[test]
     fn function_call() {
-        assert_eq!(Vm::new().eval_str("(+ 1 2 3 4)"), Val::Int(10));
+        assert_eq!(Vm::default().eval_str("(+ 1 2 3 4)"), Val::Int(10));
     }
 }
