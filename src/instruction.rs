@@ -1,11 +1,9 @@
-use compact_str::CompactString;
-
-use crate::val::Val;
+use crate::val::{symbol::SymbolId, Val};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Instruction {
     Push(Val),
     Eval(usize),
-    Deref(CompactString),
+    Deref(SymbolId),
     Return,
 }

@@ -1,7 +1,9 @@
 use bumpalo::Bump;
-use compact_str::CompactString;
 
-use crate::{instruction::Instruction, val::Val};
+use crate::{
+    instruction::Instruction,
+    val::{symbol::SymbolTable, Val},
+};
 
 use super::{ast::Ast, tokenizer::Token};
 
@@ -59,7 +61,7 @@ impl<'a> Ir<'a> {
 }
 
 impl<'a> Ir<'a> {
-    pub fn compile(&self, instructions: &mut Vec<Instruction>) {
+    pub fn compile(&self, symbols: &mut SymbolTable, instructions: &mut Vec<Instruction>) {
         match self {
             Ir::Constant(constant) => {
                 let c = match constant {
@@ -68,11 +70,14 @@ impl<'a> Ir<'a> {
                 };
                 instructions.push(Instruction::Push(c));
             }
-            Ir::Deref(ident) => instructions.push(Instruction::Deref(CompactString::new(ident))),
+            Ir::Deref(ident) => {
+                let symbol = symbols.symbol_id(ident);
+                instructions.push(Instruction::Deref(symbol));
+            }
             Ir::FunctionCall { function, args } => {
-                function.compile(instructions);
+                function.compile(symbols, instructions);
                 for arg in args {
-                    arg.compile(instructions);
+                    arg.compile(symbols, instructions);
                 }
                 instructions.push(Instruction::Eval(1 + args.len()));
             }

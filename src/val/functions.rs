@@ -2,7 +2,7 @@ use bumpalo::Bump;
 
 use crate::{instruction::Instruction, vm::Vm, SporeRc};
 
-use super::Val;
+use super::{symbol::SymbolTable, Val};
 
 type RcNativeFunction = SporeRc<dyn Fn(&Vm) -> Val>;
 
@@ -50,8 +50,8 @@ pub struct ByteCodeFunction {
 }
 
 impl ByteCodeFunction {
-    pub fn with_str(arena: &Bump, s: &str) -> ByteCodeFunction {
-        let instructions = crate::compiler::compile(&arena, s);
+    pub fn with_str(symbols: &mut SymbolTable, arena: &Bump, s: &str) -> ByteCodeFunction {
+        let instructions = crate::compiler::compile(symbols, &arena, s);
         ByteCodeFunction {
             instructions,
             args: 0,

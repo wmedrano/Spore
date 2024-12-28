@@ -81,7 +81,8 @@ impl Vm {
 
 impl Vm {
     pub fn eval_str(&mut self, s: &str) -> Val {
-        let bytecode = ByteCodeFunction::with_str(&self.compile_arena, s);
+        let bytecode =
+            ByteCodeFunction::with_str(&mut self.objects.symbols, &self.compile_arena, s);
         self.compile_arena.reset();
         self.eval(bytecode)
     }
@@ -114,9 +115,8 @@ impl Vm {
         match instruction {
             Instruction::Push(v) => self.stack.push(v.clone()),
             Instruction::Eval(n) => self.execute_eval(*n),
-            Instruction::Deref(ident) => {
-                let ident_symbol = self.objects.symbols.symbol_id(ident);
-                let v = self.globals.values.get(&ident_symbol).unwrap();
+            Instruction::Deref(symbol) => {
+                let v = self.globals.values.get(symbol).unwrap();
                 self.stack.push(v.clone());
             }
             Instruction::Return => self.execute_return(),
