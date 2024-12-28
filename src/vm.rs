@@ -1,11 +1,14 @@
 use bumpalo::Bump;
-use compact_str::CompactString;
 
 use crate::{
     instruction::Instruction,
     module::Module,
-    object_store::ObjectStore,
-    val::{ByteCodeFunction, NativeFunction, Val},
+    object_store::TypedObjectStore,
+    val::{
+        functions::{ByteCodeFunction, NativeFunction},
+        symbol::SymbolTable,
+        Val,
+    },
 };
 
 pub struct Vm {
@@ -16,9 +19,11 @@ pub struct Vm {
     objects: Objects,
 }
 
+#[derive(Default)]
 struct Objects {
-    native_functions: ObjectStore<NativeFunction>,
-    bytecode_functions: ObjectStore<ByteCodeFunction>,
+    native_functions: TypedObjectStore<NativeFunction>,
+    bytecode_functions: TypedObjectStore<ByteCodeFunction>,
+    symbols: SymbolTable,
 }
 
 struct StackFrame {
@@ -40,10 +45,7 @@ impl Vm {
             stack: Vec::with_capacity(4096),
             stack_frames: Vec::with_capacity(128),
             compile_arena: Bump::new(),
-            objects: Objects {
-                native_functions: ObjectStore::default(),
-                bytecode_functions: ObjectStore::default(),
-            },
+            objects: Objects::default(),
         };
         vm.register_function("+", plus);
         vm
@@ -54,18 +56,26 @@ impl Vm {
         name: &str,
         f: impl 'static + Fn(&[Val]) -> Val,
     ) -> &mut Self {
+        let symbol = self.objects.symbols.symbol_id(name);
         assert!(
-            !self.globals.symbols.contains_key(name),
+            !self.globals.values.contains_key(&symbol),
             "register_function called with existing function named {name}."
         );
         let id = self
             .objects
             .native_functions
             .register(NativeFunction::new(f));
-        self.globals
-            .symbols
-            .insert(CompactString::new(name), Val::NativeFunction(id));
+        self.globals.values.insert(symbol, Val::NativeFunction(id));
         self
+    }
+
+    pub fn args(&self) -> &[Val] {
+        let start = self
+            .stack_frames
+            .last()
+            .map(|sf| sf.stack_start)
+            .unwrap_or(self.stack.len());
+        &self.stack[start..]
     }
 }
 
@@ -105,7 +115,8 @@ impl Vm {
             Instruction::Push(v) => self.stack.push(v.clone()),
             Instruction::Eval(n) => self.execute_eval(*n),
             Instruction::Deref(ident) => {
-                let v = self.globals.symbols.get(ident.as_str()).unwrap();
+                let ident_symbol = self.objects.symbols.symbol_id(ident);
+                let v = self.globals.values.get(&ident_symbol).unwrap();
                 self.stack.push(v.clone());
             }
             Instruction::Return => self.execute_return(),
@@ -132,13 +143,12 @@ impl Vm {
         let function = self.stack[function_idx].clone();
         match function {
             Val::NativeFunction(native_function) => {
-                let args = &self.stack[stack_start..];
                 let ret = self
                     .objects
                     .native_functions
                     .get(native_function)
                     .unwrap()
-                    .call(args);
+                    .call(self);
                 self.stack.truncate(stack_start);
                 *self.stack.last_mut().unwrap() = ret;
             }

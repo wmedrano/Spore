@@ -23,21 +23,21 @@ impl<T> Hash for ObjectId<T> {
     }
 }
 
-pub struct ObjectStore<T> {
+pub struct TypedObjectStore<T> {
     id_to_object: HashMap<ObjectId<T>, T>,
     next_id: u32,
 }
 
-impl<T> Default for ObjectStore<T> {
+impl<T> Default for TypedObjectStore<T> {
     fn default() -> Self {
-        ObjectStore {
+        TypedObjectStore {
             id_to_object: HashMap::new(),
             next_id: 1,
         }
     }
 }
 
-impl<T> ObjectStore<T> {
+impl<T> TypedObjectStore<T> {
     pub fn get(&self, id: ObjectId<T>) -> Option<&T> {
         self.id_to_object.get(&id)
     }

@@ -1,17 +1,15 @@
 use std::collections::HashMap;
 
-use compact_str::CompactString;
-
-use crate::val::Val;
+use crate::val::{symbol::SymbolId, Val};
 
 pub struct Module {
-    pub symbols: HashMap<CompactString, Val>,
+    pub values: HashMap<SymbolId, Val>,
 }
 
 impl Module {
     pub fn new() -> Module {
         Module {
-            symbols: HashMap::new(),
+            values: HashMap::new(),
         }
     }
 }
