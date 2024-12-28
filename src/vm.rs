@@ -14,7 +14,8 @@ use crate::{
 pub struct Vm {
     globals: Module,
     stack: Vec<Val>,
-    stack_frames: Vec<StackFrame>,
+    stack_frame: StackFrame,
+    previous_stack_frames: Vec<StackFrame>,
     compile_arena: Bump,
     objects: Objects,
 }
@@ -33,12 +34,27 @@ struct StackFrame {
     function: ByteCodeFunction,
 }
 
+impl Default for StackFrame {
+    fn default() -> StackFrame {
+        StackFrame {
+            stack_start: 0,
+            bytecode_idx: 0,
+            function: ByteCodeFunction::default(),
+        }
+    }
+}
+
 impl Default for Vm {
     fn default() -> Self {
         let mut vm = Vm {
             globals: Module::new(),
             stack: Vec::with_capacity(4096),
-            stack_frames: Vec::with_capacity(128),
+            stack_frame: StackFrame {
+                stack_start: 0,
+                bytecode_idx: 0,
+                function: ByteCodeFunction::default(),
+            },
+            previous_stack_frames: Vec::with_capacity(128),
             compile_arena: Bump::new(),
             objects: Objects::default(),
         };
@@ -67,11 +83,7 @@ impl Vm {
     }
 
     pub fn args(&self) -> &[Val] {
-        let start = self
-            .stack_frames
-            .last()
-            .map(|sf| sf.stack_start)
-            .unwrap_or(self.stack.len());
+        let start = self.stack_frame.stack_start;
         &self.stack[start..]
     }
 }
@@ -86,25 +98,27 @@ impl Vm {
 
     pub fn eval(&mut self, bytecode: ByteCodeFunction) -> Val {
         assert_eq!(bytecode.args, 0);
-        let initial_stack_frames = self.stack_frames.len();
-        self.stack_frames.push(StackFrame {
-            stack_start: self.stack.len(),
-            bytecode_idx: 0,
-            function: bytecode,
-        });
-        while self.stack_frames.len() != initial_stack_frames {
+        let initial_stack_frames = self.previous_stack_frames.len();
+        let previous_stack_frame = std::mem::replace(
+            &mut self.stack_frame,
+            StackFrame {
+                stack_start: self.stack.len(),
+                bytecode_idx: 0,
+                function: bytecode,
+            },
+        );
+        self.previous_stack_frames.push(previous_stack_frame);
+        while self.previous_stack_frames.len() != initial_stack_frames {
             self.run_next();
         }
         self.stack.last().cloned().unwrap_or(Val::Void)
     }
 
     fn run_next(&mut self) {
-        let bytecode_idx = self.stack_frames.last().unwrap().bytecode_idx;
-        self.stack_frames.last_mut().unwrap().bytecode_idx = bytecode_idx + 1;
+        let bytecode_idx = self.stack_frame.bytecode_idx;
+        self.stack_frame.bytecode_idx = bytecode_idx + 1;
         let instruction = self
-            .stack_frames
-            .last()
-            .unwrap()
+            .stack_frame
             .function
             .instructions
             .get(bytecode_idx)
@@ -121,7 +135,12 @@ impl Vm {
     }
 
     fn execute_return(&mut self) {
-        let stack_start = self.stack_frames.pop().unwrap().stack_start;
+        let stack_start = self.stack_frame.stack_start;
+        match self.previous_stack_frames.pop() {
+            Some(sf) => self.stack_frame = sf,
+            None => self.stack_frame.stack_start = 0,
+        }
+        self.stack_frame = self.previous_stack_frames.pop().unwrap_or_default();
         let return_value = if self.stack.len() >= stack_start {
             self.stack.last().unwrap().clone()
         } else {
@@ -140,11 +159,15 @@ impl Vm {
         let function = self.stack[function_idx].clone();
         match function {
             Val::NativeFunction(native_function) => {
-                self.stack_frames.push(StackFrame {
-                    stack_start,
-                    bytecode_idx: 0,
-                    function: self.objects.null_bytecode.clone(),
-                });
+                let previous_stack_frame = std::mem::replace(
+                    &mut self.stack_frame,
+                    StackFrame {
+                        stack_start,
+                        bytecode_idx: 0,
+                        function: self.objects.null_bytecode.clone(),
+                    },
+                );
+                self.previous_stack_frames.push(previous_stack_frame);
                 let ret = self
                     .objects
                     .native_functions
@@ -153,22 +176,25 @@ impl Vm {
                     .call(self);
                 self.stack.truncate(stack_start);
                 *self.stack.last_mut().unwrap() = ret;
-                self.stack_frames.pop();
+                self.stack_frame = self.previous_stack_frames.pop().unwrap();
             }
             Val::BytecodeFunction(bytecode_function) => {
-                let stack_frame = StackFrame {
-                    stack_start,
-                    bytecode_idx: 0,
-                    function: self
-                        .objects
-                        .bytecode_functions
-                        .get(bytecode_function)
-                        .unwrap()
-                        .clone(),
-                };
-                self.stack_frames.push(stack_frame);
+                let previous_stack_frame = std::mem::replace(
+                    &mut self.stack_frame,
+                    StackFrame {
+                        stack_start,
+                        bytecode_idx: 0,
+                        function: self
+                            .objects
+                            .bytecode_functions
+                            .get(bytecode_function)
+                            .unwrap()
+                            .clone(),
+                    },
+                );
+                self.previous_stack_frames.push(previous_stack_frame);
             }
-            _ => todo!(),
+            v => todo!("{v:?} is not callable"),
         }
     }
 }
