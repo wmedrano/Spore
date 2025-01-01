@@ -4,14 +4,14 @@ use crate::{instruction::Instruction, vm::Vm, SporeRc};
 
 use super::{symbol::SymbolTable, Val};
 
-type RcNativeFunction = SporeRc<dyn Fn(&Vm) -> Val>;
+type RcNativeFunction = SporeRc<dyn Fn(&mut Vm) -> Val>;
 
 #[derive(Clone)]
 pub struct NativeFunction {
     f: RcNativeFunction,
 }
 
-impl<F: 'static + Fn(&Vm) -> Val> From<F> for NativeFunction {
+impl<F: 'static + Fn(&mut Vm) -> Val> From<F> for NativeFunction {
     fn from(f: F) -> NativeFunction {
         NativeFunction { f: SporeRc::new(f) }
     }
@@ -19,14 +19,14 @@ impl<F: 'static + Fn(&Vm) -> Val> From<F> for NativeFunction {
 
 impl NativeFunction {
     pub fn new<F: 'static + Fn(&[Val]) -> Val>(f: F) -> NativeFunction {
-        let new_f = move |vm: &Vm| {
+        let new_f = move |vm: &mut Vm| {
             let args = vm.args();
             f(args)
         };
         NativeFunction::from(new_f)
     }
 
-    pub fn call(&self, vm: &Vm) -> Val {
+    pub fn call(&self, vm: &mut Vm) -> Val {
         (self.f)(vm)
     }
 }

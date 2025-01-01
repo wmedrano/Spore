@@ -15,6 +15,12 @@ pub enum TokenType {
     Identifier,
 }
 
+impl Token {
+    pub fn text(self, source: &str) -> &str {
+        self.span.text(source)
+    }
+}
+
 pub fn tokenize(source: &str) -> impl '_ + Iterator<Item = Token> {
     let mut source_iter = source.char_indices().peekable();
     std::iter::from_fn(move || loop {
@@ -86,9 +92,7 @@ mod tests {
     use super::*;
 
     fn tokenize_to_vec(source: &str) -> Vec<(&str, Token)> {
-        tokenize(source)
-            .map(|t| (t.span.context(source), t))
-            .collect()
+        tokenize(source).map(|t| (t.text(source), t)).collect()
     }
 
     #[test]

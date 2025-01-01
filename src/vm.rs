@@ -58,7 +58,8 @@ impl Default for Vm {
             compile_arena: Bump::new(),
             objects: Objects::default(),
         };
-        vm.register_function("+", plus);
+        vm.register_function("+", plus_fn)
+            .register_function_raw("define", define_fn);
         vm
     }
 }
@@ -69,15 +70,24 @@ impl Vm {
         name: &str,
         f: impl 'static + Fn(&[Val]) -> Val,
     ) -> &mut Self {
+        self.register_native_function(name, NativeFunction::new(f))
+    }
+
+    pub fn register_function_raw(
+        &mut self,
+        name: &str,
+        f: impl 'static + Fn(&mut Vm) -> Val,
+    ) -> &mut Self {
+        self.register_native_function(name, NativeFunction::from(f))
+    }
+
+    pub fn register_native_function(&mut self, name: &str, f: NativeFunction) -> &mut Self {
         let symbol = self.objects.symbols.symbol_id(name);
         assert!(
             !self.globals.values.contains_key(&symbol),
             "register_function called with existing function named {name}."
         );
-        let id = self
-            .objects
-            .native_functions
-            .register(NativeFunction::new(f));
+        let id = self.objects.native_functions.register(f);
         self.globals.values.insert(symbol, Val::NativeFunction(id));
         self
     }
@@ -127,8 +137,16 @@ impl Vm {
             Instruction::Push(v) => self.stack.push(v.clone()),
             Instruction::Eval(n) => self.execute_eval(*n),
             Instruction::Deref(symbol) => {
-                let v = self.globals.values.get(symbol).unwrap();
-                self.stack.push(v.clone());
+                let v = match self.globals.values.get(symbol) {
+                    Some(v) => v.clone(),
+                    None => {
+                        todo!(
+                            "symbol {symbol:?} not found",
+                            symbol = self.objects.symbols.symbol_name(*symbol)
+                        )
+                    }
+                };
+                self.stack.push(v);
             }
             Instruction::Return => self.execute_return(),
         }
@@ -168,12 +186,13 @@ impl Vm {
                     },
                 );
                 self.previous_stack_frames.push(previous_stack_frame);
-                let ret = self
+                let function = self
                     .objects
                     .native_functions
                     .get(native_function)
                     .unwrap()
-                    .call(self);
+                    .clone();
+                let ret = function.call(self);
                 self.stack.truncate(stack_start);
                 *self.stack.last_mut().unwrap() = ret;
                 self.stack_frame = self.previous_stack_frames.pop().unwrap();
@@ -199,7 +218,7 @@ impl Vm {
     }
 }
 
-fn plus(args: &[Val]) -> Val {
+fn plus_fn(args: &[Val]) -> Val {
     let mut int_sum = 0;
     let mut float_sum = 0.0;
     for arg in args {
@@ -216,6 +235,15 @@ fn plus(args: &[Val]) -> Val {
     }
 }
 
+fn define_fn(vm: &mut Vm) -> Val {
+    let (sym, val) = match vm.args() {
+        [Val::Symbol(sym), val] => (sym.clone(), val.clone()),
+        _ => todo!(),
+    };
+    vm.globals.values.insert(sym, val);
+    Val::Void
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -223,5 +251,12 @@ mod tests {
     #[test]
     fn function_call() {
         assert_eq!(Vm::default().eval_str("(+ 1 2 3 4)"), Val::Int(10));
+    }
+
+    #[test]
+    fn define() {
+        let mut vm = Vm::default();
+        assert_eq!(vm.eval_str("(define 'x 12)"), Val::Void);
+        assert_eq!(vm.eval_str("x"), Val::Int(12));
     }
 }

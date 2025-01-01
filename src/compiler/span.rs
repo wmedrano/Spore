@@ -5,7 +5,7 @@ pub struct Span {
 }
 
 impl Span {
-    pub fn context(self, source: &str) -> &str {
+    pub fn text(self, source: &str) -> &str {
         &source[self.start as usize..self.end as usize]
     }
 }

@@ -9,8 +9,9 @@ use super::{ast::Ast, tokenizer::Token};
 
 type BumpVec<'a, T> = bumpalo::collections::Vec<'a, T>;
 
+#[derive(Debug)]
 pub enum Ir<'a> {
-    Constant(Constant),
+    Constant(Constant<'a>),
     Deref(&'a str),
     FunctionCall {
         function: &'a Ir<'a>,
@@ -18,9 +19,11 @@ pub enum Ir<'a> {
     },
 }
 
-pub enum Constant {
+#[derive(Debug)]
+pub enum Constant<'a> {
     Int(i64),
     Float(f64),
+    Symbol(&'a str),
 }
 
 impl<'a> Ir<'a> {
@@ -46,7 +49,7 @@ impl<'a> Ir<'a> {
     }
 
     fn with_token(source: &'a str, token: &Token) -> Ir<'a> {
-        let text = token.span.context(source);
+        let text = token.text(source);
         let leading_char = text.chars().next().unwrap_or(' ');
         if leading_char == '-' || leading_char.is_ascii_digit() {
             if let Ok(x) = text.parse() {
@@ -55,6 +58,9 @@ impl<'a> Ir<'a> {
             if let Ok(x) = text.parse() {
                 return Ir::Constant(Constant::Float(x));
             }
+        }
+        if text.starts_with('\'') {
+            return Ir::Constant(Constant::Symbol(&text[1..]));
         }
         Ir::Deref(text)
     }
@@ -67,6 +73,7 @@ impl<'a> Ir<'a> {
                 let c = match constant {
                     Constant::Int(x) => Val::Int(*x),
                     Constant::Float(x) => Val::Float(*x),
+                    Constant::Symbol(x) => Val::Symbol(symbols.symbol_id(x)),
                 };
                 instructions.push(Instruction::Push(c));
             }
