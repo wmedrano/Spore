@@ -1,12 +1,13 @@
 use bumpalo::Bump;
 
 use crate::{
+    compiler::CompileError,
     instruction::Instruction,
     module::Module,
     object_store::TypedObjectStore,
     val::{
         functions::{ByteCodeFunction, NativeFunction},
-        symbol::SymbolTable,
+        symbol::{SymbolId, SymbolTable},
         Val,
     },
 };
@@ -68,7 +69,7 @@ impl Vm {
     pub fn register_function(
         &mut self,
         name: &str,
-        f: impl 'static + Fn(&[Val]) -> Val,
+        f: impl 'static + Fn(&[Val]) -> VmResult<Val>,
     ) -> &mut Self {
         self.register_native_function(name, NativeFunction::new(f))
     }
@@ -76,7 +77,7 @@ impl Vm {
     pub fn register_function_raw(
         &mut self,
         name: &str,
-        f: impl 'static + Fn(&mut Vm) -> Val,
+        f: impl 'static + Fn(&mut Vm) -> VmResult<Val>,
     ) -> &mut Self {
         self.register_native_function(name, NativeFunction::from(f))
     }
@@ -98,15 +99,30 @@ impl Vm {
     }
 }
 
+#[derive(Debug)]
+pub enum VmError {
+    Compile(CompileError),
+    SymbolNotFound(SymbolId),
+    NotCallable(Val),
+}
+
+pub type VmResult<T> = Result<T, VmError>;
+
+impl From<CompileError> for VmError {
+    fn from(value: CompileError) -> Self {
+        VmError::Compile(value)
+    }
+}
+
 impl Vm {
-    pub fn eval_str(&mut self, s: &str) -> Val {
+    pub fn eval_str(&mut self, s: &str) -> VmResult<Val> {
         let bytecode =
-            ByteCodeFunction::with_str(&mut self.objects.symbols, &self.compile_arena, s);
+            ByteCodeFunction::with_str(&mut self.objects.symbols, s, &self.compile_arena)?;
         self.compile_arena.reset();
         self.eval(bytecode)
     }
 
-    pub fn eval(&mut self, bytecode: ByteCodeFunction) -> Val {
+    pub fn eval(&mut self, bytecode: ByteCodeFunction) -> VmResult<Val> {
         assert_eq!(bytecode.args, 0);
         let initial_stack_frames = self.previous_stack_frames.len();
         let previous_stack_frame = std::mem::replace(
@@ -119,12 +135,13 @@ impl Vm {
         );
         self.previous_stack_frames.push(previous_stack_frame);
         while self.previous_stack_frames.len() != initial_stack_frames {
-            self.run_next();
+            self.run_next()?;
         }
-        self.stack.last().cloned().unwrap_or(Val::Void)
+        let res = self.stack.last().cloned().unwrap_or(Val::Void);
+        Ok(res)
     }
 
-    fn run_next(&mut self) {
+    fn run_next(&mut self) -> VmResult<()> {
         let bytecode_idx = self.stack_frame.bytecode_idx;
         self.stack_frame.bytecode_idx = bytecode_idx + 1;
         let instruction = self
@@ -135,21 +152,17 @@ impl Vm {
             .unwrap_or(&Instruction::Return);
         match instruction {
             Instruction::Push(v) => self.stack.push(v.clone()),
-            Instruction::Eval(n) => self.execute_eval(*n),
+            Instruction::Eval(n) => self.execute_eval(*n)?,
             Instruction::Deref(symbol) => {
                 let v = match self.globals.values.get(symbol) {
                     Some(v) => v.clone(),
-                    None => {
-                        todo!(
-                            "symbol {symbol:?} not found",
-                            symbol = self.objects.symbols.symbol_name(*symbol)
-                        )
-                    }
+                    None => return Err(VmError::SymbolNotFound(*symbol)),
                 };
                 self.stack.push(v);
             }
             Instruction::Return => self.execute_return(),
         }
+        Ok(())
     }
 
     fn execute_return(&mut self) {
@@ -171,7 +184,7 @@ impl Vm {
         }
     }
 
-    fn execute_eval(&mut self, n: usize) {
+    fn execute_eval(&mut self, n: usize) -> VmResult<()> {
         let function_idx = self.stack.len() - n;
         let stack_start = function_idx + 1;
         let function = self.stack[function_idx].clone();
@@ -192,7 +205,7 @@ impl Vm {
                     .get(native_function)
                     .unwrap()
                     .clone();
-                let ret = function.call(self);
+                let ret = function.call(self)?;
                 self.stack.truncate(stack_start);
                 *self.stack.last_mut().unwrap() = ret;
                 self.stack_frame = self.previous_stack_frames.pop().unwrap();
@@ -213,12 +226,13 @@ impl Vm {
                 );
                 self.previous_stack_frames.push(previous_stack_frame);
             }
-            v => todo!("{v:?} is not callable"),
+            v => return Err(VmError::NotCallable(v)),
         }
+        Ok(())
     }
 }
 
-fn plus_fn(args: &[Val]) -> Val {
+fn plus_fn(args: &[Val]) -> VmResult<Val> {
     let mut int_sum = 0;
     let mut float_sum = 0.0;
     for arg in args {
@@ -228,20 +242,21 @@ fn plus_fn(args: &[Val]) -> Val {
             v => todo!("{v:?} not handled in + operator"),
         }
     }
-    if float_sum == 0.0 {
+    let res = if float_sum == 0.0 {
         Val::Int(int_sum)
     } else {
         Val::Float(float_sum + int_sum as f64)
-    }
+    };
+    Ok(res)
 }
 
-fn define_fn(vm: &mut Vm) -> Val {
+fn define_fn(vm: &mut Vm) -> VmResult<Val> {
     let (sym, val) = match vm.args() {
         [Val::Symbol(sym), val] => (sym.clone(), val.clone()),
         _ => todo!(),
     };
     vm.globals.values.insert(sym, val);
-    Val::Void
+    Ok(Val::Void)
 }
 
 #[cfg(test)]
@@ -250,13 +265,13 @@ mod tests {
 
     #[test]
     fn function_call() {
-        assert_eq!(Vm::default().eval_str("(+ 1 2 3 4)"), Val::Int(10));
+        assert_eq!(Vm::default().eval_str("(+ 1 2 3 4)").unwrap(), Val::Int(10));
     }
 
     #[test]
     fn define() {
         let mut vm = Vm::default();
-        assert_eq!(vm.eval_str("(define 'x 12)"), Val::Void);
-        assert_eq!(vm.eval_str("x"), Val::Int(12));
+        assert_eq!(vm.eval_str("(define 'x 12)").unwrap(), Val::Void);
+        assert_eq!(vm.eval_str("x").unwrap(), Val::Int(12));
     }
 }

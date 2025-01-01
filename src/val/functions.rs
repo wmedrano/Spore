@@ -1,24 +1,29 @@
 use bumpalo::Bump;
 
-use crate::{instruction::Instruction, vm::Vm, SporeRc};
+use crate::{
+    compiler::CompileError,
+    instruction::Instruction,
+    vm::{Vm, VmResult},
+    SporeRc,
+};
 
 use super::{symbol::SymbolTable, Val};
 
-type RcNativeFunction = SporeRc<dyn Fn(&mut Vm) -> Val>;
+type RcNativeFunction = SporeRc<dyn Fn(&mut Vm) -> VmResult<Val>>;
 
 #[derive(Clone)]
 pub struct NativeFunction {
     f: RcNativeFunction,
 }
 
-impl<F: 'static + Fn(&mut Vm) -> Val> From<F> for NativeFunction {
+impl<F: 'static + Fn(&mut Vm) -> VmResult<Val>> From<F> for NativeFunction {
     fn from(f: F) -> NativeFunction {
         NativeFunction { f: SporeRc::new(f) }
     }
 }
 
 impl NativeFunction {
-    pub fn new<F: 'static + Fn(&[Val]) -> Val>(f: F) -> NativeFunction {
+    pub fn new<F: 'static + Fn(&[Val]) -> VmResult<Val>>(f: F) -> NativeFunction {
         let new_f = move |vm: &mut Vm| {
             let args = vm.args();
             f(args)
@@ -26,7 +31,7 @@ impl NativeFunction {
         NativeFunction::from(new_f)
     }
 
-    pub fn call(&self, vm: &mut Vm) -> Val {
+    pub fn call(&self, vm: &mut Vm) -> VmResult<Val> {
         (self.f)(vm)
     }
 }
@@ -50,11 +55,15 @@ pub struct ByteCodeFunction {
 }
 
 impl ByteCodeFunction {
-    pub fn with_str(symbols: &mut SymbolTable, arena: &Bump, s: &str) -> ByteCodeFunction {
-        let instructions = crate::compiler::compile(symbols, &arena, s);
-        ByteCodeFunction {
+    pub fn with_str(
+        symbols: &mut SymbolTable,
+        s: &str,
+        arena: &Bump,
+    ) -> Result<ByteCodeFunction, CompileError> {
+        let instructions = crate::compiler::compile(symbols, s, arena)?;
+        Ok(ByteCodeFunction {
             instructions,
             args: 0,
-        }
+        })
     }
 }
