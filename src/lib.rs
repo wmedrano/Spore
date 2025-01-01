@@ -1,5 +1,6 @@
 use std::rc::Rc;
 
+pub mod builtins;
 pub mod compiler;
 pub mod instruction;
 pub mod module;

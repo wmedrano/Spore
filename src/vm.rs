@@ -13,7 +13,7 @@ use crate::{
 };
 
 pub struct Vm {
-    globals: Module,
+    pub(crate) globals: Module,
     stack: Vec<Val>,
     stack_frame: StackFrame,
     previous_stack_frames: Vec<StackFrame>,
@@ -59,34 +59,18 @@ impl Default for Vm {
             compile_arena: Bump::new(),
             objects: Objects::default(),
         };
-        vm.register_function("+", plus_fn)
-            .register_function_raw("define", define_fn);
+        crate::builtins::register_builtins(&mut vm);
         vm
     }
 }
 
 impl Vm {
-    pub fn register_function(
-        &mut self,
-        name: &str,
-        f: impl 'static + Fn(&[Val]) -> VmResult<Val>,
-    ) -> &mut Self {
-        self.register_native_function(name, NativeFunction::new(f))
-    }
-
-    pub fn register_function_raw(
-        &mut self,
-        name: &str,
-        f: impl 'static + Fn(&mut Vm) -> VmResult<Val>,
-    ) -> &mut Self {
-        self.register_native_function(name, NativeFunction::from(f))
-    }
-
-    pub fn register_native_function(&mut self, name: &str, f: NativeFunction) -> &mut Self {
-        let symbol = self.objects.symbols.symbol_id(name);
+    pub fn register_native_function(&mut self, f: NativeFunction) -> &mut Self {
+        let symbol = self.objects.symbols.symbol_id(f.name());
         assert!(
             !self.globals.values.contains_key(&symbol),
-            "register_function called with existing function named {name}."
+            "register_function called with existing function named {name}.",
+            name = f.name()
         );
         let id = self.objects.native_functions.register(f);
         self.globals.values.insert(symbol, Val::NativeFunction(id));
@@ -230,33 +214,6 @@ impl Vm {
         }
         Ok(())
     }
-}
-
-fn plus_fn(args: &[Val]) -> VmResult<Val> {
-    let mut int_sum = 0;
-    let mut float_sum = 0.0;
-    for arg in args {
-        match arg {
-            Val::Int(x) => int_sum += *x,
-            Val::Float(x) => float_sum += *x,
-            v => todo!("{v:?} not handled in + operator"),
-        }
-    }
-    let res = if float_sum == 0.0 {
-        Val::Int(int_sum)
-    } else {
-        Val::Float(float_sum + int_sum as f64)
-    };
-    Ok(res)
-}
-
-fn define_fn(vm: &mut Vm) -> VmResult<Val> {
-    let (sym, val) = match vm.args() {
-        [Val::Symbol(sym), val] => (sym.clone(), val.clone()),
-        _ => todo!(),
-    };
-    vm.globals.values.insert(sym, val);
-    Ok(Val::Void)
 }
 
 #[cfg(test)]

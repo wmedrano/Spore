@@ -1,4 +1,5 @@
 use bumpalo::Bump;
+use compact_str::CompactString;
 
 use crate::{
     compiler::CompileError,
@@ -13,22 +14,28 @@ type RcNativeFunction = SporeRc<dyn Fn(&mut Vm) -> VmResult<Val>>;
 
 #[derive(Clone)]
 pub struct NativeFunction {
+    name: CompactString,
     f: RcNativeFunction,
 }
 
-impl<F: 'static + Fn(&mut Vm) -> VmResult<Val>> From<F> for NativeFunction {
-    fn from(f: F) -> NativeFunction {
-        NativeFunction { f: SporeRc::new(f) }
-    }
-}
-
 impl NativeFunction {
-    pub fn new<F: 'static + Fn(&[Val]) -> VmResult<Val>>(f: F) -> NativeFunction {
+    pub fn new<F: 'static + Fn(&mut Vm) -> VmResult<Val>>(name: &str, f: F) -> NativeFunction {
+        NativeFunction {
+            name: CompactString::new(name),
+            f: SporeRc::new(f),
+        }
+    }
+
+    pub fn with_args<F: 'static + Fn(&[Val]) -> VmResult<Val>>(name: &str, f: F) -> NativeFunction {
         let new_f = move |vm: &mut Vm| {
             let args = vm.args();
             f(args)
         };
-        NativeFunction::from(new_f)
+        NativeFunction::new(name, new_f)
+    }
+
+    pub fn name(&self) -> &str {
+        self.name.as_str()
     }
 
     pub fn call(&self, vm: &mut Vm) -> VmResult<Val> {
