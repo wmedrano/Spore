@@ -1,0 +1,28 @@
+#+title: Spore Project
+#+author: will@wmedrano.dev
+
+* Features
+
+** Functions
+
+*** Define Custom Functions
+
+*** Capture variables in Lambdas
+
+** TODO Datatypes
+
+*** TODO Custom types
+
+*** TODO Strings
+
+* Tooling
+
+** TODO Benchmarks
+
+*** TODO Compiler Benchmarks
+
+*** TODO Interpretter Benchmarks
+
+* Milestones
+
+** TODO Implement Fibonacci Function

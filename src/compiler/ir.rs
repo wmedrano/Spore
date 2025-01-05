@@ -58,6 +58,7 @@ pub enum IrError {
     EmptyFunctionCall(Span),
     ConstantNotCallable(Span),
     BadDefine(Span),
+    DefineExpectedIdentifierButFoundConstant(Span),
     DefineExpectedSymbol(Span),
 }
 
@@ -110,11 +111,22 @@ impl<'a> IrBuilder<'a> {
     }
 
     fn build_define(&self, symbol: &Ast, expr: &Ast) -> Result<Ir<'a>, IrError> {
-        let symbol = symbol
+        let symbol_text = symbol
             .leaf_text(self.source)
             .ok_or_else(|| IrError::DefineExpectedSymbol(symbol.span()))?;
+        let symbol_text = match ParsedText::new(symbol_text) {
+            ParsedText::Constant(_) => {
+                return Err(IrError::DefineExpectedIdentifierButFoundConstant(
+                    symbol.span(),
+                ))
+            }
+            ParsedText::Identifier(symbol) => symbol,
+        };
         let expr = self.arena.alloc(self.build(expr)?);
-        Ok(Ir::Define { symbol, expr })
+        Ok(Ir::Define {
+            symbol: symbol_text,
+            expr,
+        })
     }
 }
 
