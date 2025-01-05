@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use crate::val::{symbol::SymbolId, Val};
 
+#[derive(Debug)]
 pub struct Module {
     pub values: HashMap<SymbolId, Val>,
 }

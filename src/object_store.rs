@@ -23,6 +23,7 @@ impl<T> Hash for ObjectId<T> {
     }
 }
 
+#[derive(Debug)]
 pub struct TypedObjectStore<T> {
     id_to_object: HashMap<ObjectId<T>, T>,
     next_id: u32,

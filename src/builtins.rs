@@ -5,7 +5,8 @@ use crate::{
 
 pub fn register_builtins(vm: &mut Vm) -> &mut Vm {
     vm.register_native_function(NativeFunction::with_args("+", plus_fn))
-        .register_native_function(NativeFunction::new("define", define_fn))
+        .register_native_function(NativeFunction::new("%define", define_fn))
+        .register_native_function(NativeFunction::with_args("do", do_fn))
 }
 
 fn plus_fn(args: &[Val]) -> VmResult<Val> {
@@ -33,4 +34,8 @@ fn define_fn(vm: &mut Vm) -> VmResult<Val> {
     };
     vm.globals.values.insert(sym, val);
     Ok(Val::Void)
+}
+
+fn do_fn(args: &[Val]) -> VmResult<Val> {
+    Ok(args.last().copied().unwrap_or(Val::Void))
 }

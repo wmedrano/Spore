@@ -12,6 +12,7 @@ use crate::{
     },
 };
 
+#[derive(Debug)]
 pub struct Vm {
     pub(crate) globals: Module,
     stack: Vec<Val>,
@@ -21,7 +22,7 @@ pub struct Vm {
     objects: Objects,
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 struct Objects {
     native_functions: TypedObjectStore<NativeFunction>,
     bytecode_functions: TypedObjectStore<ByteCodeFunction>,
@@ -29,6 +30,7 @@ struct Objects {
     null_bytecode: ByteCodeFunction,
 }
 
+#[derive(Debug)]
 struct StackFrame {
     stack_start: usize,
     bytecode_idx: usize,
@@ -80,6 +82,10 @@ impl Vm {
     pub fn args(&self) -> &[Val] {
         let start = self.stack_frame.stack_start;
         &self.stack[start..]
+    }
+
+    pub fn symbol_name(&self, symbol_id: SymbolId) -> Option<&str> {
+        self.objects.symbols.symbol_name(symbol_id)
     }
 }
 
@@ -228,7 +234,7 @@ mod tests {
     #[test]
     fn define() {
         let mut vm = Vm::default();
-        assert_eq!(vm.eval_str("(define 'x 12)").unwrap(), Val::Void);
+        assert_eq!(vm.eval_str("(define x 12)").unwrap(), Val::Void);
         assert_eq!(vm.eval_str("x").unwrap(), Val::Int(12));
     }
 }

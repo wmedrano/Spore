@@ -30,3 +30,9 @@ impl SymbolTable {
         self.id_to_name.get(&id).map(CompactString::as_str)
     }
 }
+
+impl std::fmt::Debug for SymbolTable {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.id_to_name.fmt(f)
+    }
+}
