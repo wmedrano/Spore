@@ -8,7 +8,7 @@ use crate::{
     SporeRc,
 };
 
-use super::{symbol::SymbolTable, Val};
+use super::Val;
 
 type RcNativeFunction = SporeRc<dyn Fn(&mut Vm) -> VmResult<Val>>;
 
@@ -58,16 +58,12 @@ impl PartialEq for NativeFunction {
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct ByteCodeFunction {
     pub instructions: SporeRc<[Instruction]>,
-    pub args: usize,
+    pub args: u32,
 }
 
 impl ByteCodeFunction {
-    pub fn with_str(
-        symbols: &mut SymbolTable,
-        s: &str,
-        arena: &Bump,
-    ) -> Result<ByteCodeFunction, CompileError> {
-        let instructions = crate::compiler::compile(symbols, s, arena)?;
+    pub fn with_str(vm: &mut Vm, s: &str, arena: &Bump) -> Result<ByteCodeFunction, CompileError> {
+        let instructions = crate::compiler::compile(vm, s, arena)?;
         Ok(ByteCodeFunction {
             instructions,
             args: 0,

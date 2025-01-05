@@ -4,6 +4,7 @@ use crate::val::{symbol::SymbolId, Val};
 pub enum Instruction {
     Push(Val),
     Eval(usize),
+    Get(usize),
     Deref(SymbolId),
     Return,
 }

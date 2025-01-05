@@ -18,52 +18,22 @@ pub struct Vm {
     stack: Vec<Val>,
     stack_frame: StackFrame,
     previous_stack_frames: Vec<StackFrame>,
-    compile_arena: Bump,
-    objects: Objects,
+    pub(crate) objects: Objects,
 }
 
 #[derive(Debug, Default)]
-struct Objects {
-    native_functions: TypedObjectStore<NativeFunction>,
-    bytecode_functions: TypedObjectStore<ByteCodeFunction>,
-    symbols: SymbolTable,
-    null_bytecode: ByteCodeFunction,
+pub struct Objects {
+    pub native_functions: TypedObjectStore<NativeFunction>,
+    pub bytecode_functions: TypedObjectStore<ByteCodeFunction>,
+    pub symbols: SymbolTable,
+    pub null_bytecode: ByteCodeFunction,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 struct StackFrame {
     stack_start: usize,
     bytecode_idx: usize,
     function: ByteCodeFunction,
-}
-
-impl Default for StackFrame {
-    fn default() -> StackFrame {
-        StackFrame {
-            stack_start: 0,
-            bytecode_idx: 0,
-            function: ByteCodeFunction::default(),
-        }
-    }
-}
-
-impl Default for Vm {
-    fn default() -> Self {
-        let mut vm = Vm {
-            globals: Module::new(),
-            stack: Vec::with_capacity(4096),
-            stack_frame: StackFrame {
-                stack_start: 0,
-                bytecode_idx: 0,
-                function: ByteCodeFunction::default(),
-            },
-            previous_stack_frames: Vec::with_capacity(128),
-            compile_arena: Bump::new(),
-            objects: Objects::default(),
-        };
-        crate::builtins::register_builtins(&mut vm);
-        vm
-    }
 }
 
 impl Vm {
@@ -89,11 +59,13 @@ impl Vm {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum VmError {
     Compile(CompileError),
     SymbolNotFound(SymbolId),
     NotCallable(Val),
+    WrongType,
+    WrongArity { expected: u32, actual: u32 },
 }
 
 pub type VmResult<T> = Result<T, VmError>;
@@ -106,9 +78,7 @@ impl From<CompileError> for VmError {
 
 impl Vm {
     pub fn eval_str(&mut self, s: &str) -> VmResult<Val> {
-        let bytecode =
-            ByteCodeFunction::with_str(&mut self.objects.symbols, s, &self.compile_arena)?;
-        self.compile_arena.reset();
+        let bytecode = ByteCodeFunction::with_str(self, s, &Bump::new())?;
         self.eval(bytecode)
     }
 
@@ -141,11 +111,16 @@ impl Vm {
             .get(bytecode_idx)
             .unwrap_or(&Instruction::Return);
         match instruction {
-            Instruction::Push(v) => self.stack.push(v.clone()),
+            Instruction::Push(v) => self.stack.push(*v),
             Instruction::Eval(n) => self.execute_eval(*n)?,
+            Instruction::Get(idx) => {
+                let idx = self.stack_frame.stack_start + idx;
+                let v = self.stack[idx];
+                self.stack.push(v);
+            }
             Instruction::Deref(symbol) => {
                 let v = match self.globals.values.get(symbol) {
-                    Some(v) => v.clone(),
+                    Some(v) => *v,
                     None => return Err(VmError::SymbolNotFound(*symbol)),
                 };
                 self.stack.push(v);
@@ -163,7 +138,7 @@ impl Vm {
         }
         self.stack_frame = self.previous_stack_frames.pop().unwrap_or_default();
         let return_value = if self.stack.len() >= stack_start {
-            self.stack.last().unwrap().clone()
+            *self.stack.last().unwrap()
         } else {
             todo!()
         };
@@ -177,7 +152,7 @@ impl Vm {
     fn execute_eval(&mut self, n: usize) -> VmResult<()> {
         let function_idx = self.stack.len() - n;
         let stack_start = function_idx + 1;
-        let function = self.stack[function_idx].clone();
+        let function = self.stack[function_idx];
         match function {
             Val::NativeFunction(native_function) => {
                 let previous_stack_frame = std::mem::replace(
@@ -201,17 +176,25 @@ impl Vm {
                 self.stack_frame = self.previous_stack_frames.pop().unwrap();
             }
             Val::BytecodeFunction(bytecode_function) => {
+                let function = self
+                    .objects
+                    .bytecode_functions
+                    .get(bytecode_function)
+                    .unwrap()
+                    .clone();
+                let arg_count = n as u32 - 1;
+                if function.args != arg_count {
+                    return Err(VmError::WrongArity {
+                        expected: function.args,
+                        actual: arg_count,
+                    });
+                }
                 let previous_stack_frame = std::mem::replace(
                     &mut self.stack_frame,
                     StackFrame {
                         stack_start,
                         bytecode_idx: 0,
-                        function: self
-                            .objects
-                            .bytecode_functions
-                            .get(bytecode_function)
-                            .unwrap()
-                            .clone(),
+                        function,
                     },
                 );
                 self.previous_stack_frames.push(previous_stack_frame);
@@ -236,5 +219,40 @@ mod tests {
         let mut vm = Vm::default();
         assert_eq!(vm.eval_str("(define x 12)").unwrap(), Val::Void);
         assert_eq!(vm.eval_str("x").unwrap(), Val::Int(12));
+    }
+
+    #[test]
+    fn define_function() {
+        let mut vm = Vm::default();
+        assert_eq!(vm.eval_str("(define x (lambda () 12))").unwrap(), Val::Void);
+        assert_eq!(vm.eval_str("(x)").unwrap(), Val::Int(12));
+    }
+
+    #[test]
+    fn define_function_with_args() {
+        let mut vm = Vm::default();
+        assert_eq!(
+            vm.eval_str("(define x (lambda (a b c) (+ a b c)))")
+                .unwrap(),
+            Val::Void
+        );
+        assert_eq!(vm.eval_str("(x 1 2 3)").unwrap(), Val::Int(6));
+    }
+
+    #[test]
+    fn function_with_wrong_number_of_args_fails() {
+        let mut vm = Vm::default();
+        assert_eq!(
+            vm.eval_str("(define x (lambda (a b c) (+ a b c)))")
+                .unwrap(),
+            Val::Void
+        );
+        assert_eq!(
+            vm.eval_str("(x 1)").unwrap_err(),
+            VmError::WrongArity {
+                expected: 3,
+                actual: 1
+            }
+        );
     }
 }

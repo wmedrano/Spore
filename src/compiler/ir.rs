@@ -1,10 +1,5 @@
 use bumpalo::Bump;
 
-use crate::{
-    instruction::Instruction,
-    val::{symbol::SymbolTable, Val},
-};
-
 use super::{ast::Ast, span::Span};
 
 type BumpVec<'a, T> = bumpalo::collections::Vec<'a, T>;
@@ -20,6 +15,10 @@ pub enum Ir<'a> {
     Define {
         symbol: &'a str,
         expr: &'a Ir<'a>,
+    },
+    Lambda {
+        args: BumpVec<'a, &'a str>,
+        exprs: BumpVec<'a, Ir<'a>>,
     },
 }
 
@@ -53,11 +52,12 @@ impl<'a> ParsedText<'a> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum IrError {
     EmptyFunctionCall(Span),
     ConstantNotCallable(Span),
     BadDefine(Span),
+    BadLambda(Span),
     DefineExpectedIdentifierButFoundConstant(Span),
     DefineExpectedSymbol(Span),
 }
@@ -86,6 +86,10 @@ impl<'a> IrBuilder<'a> {
                         [_define, symbol, expr] => self.build_define(symbol, expr),
                         _ => Err(IrError::BadDefine(*span)),
                     },
+                    Some((_, ParsedText::Identifier("lambda"))) => match children.as_slice() {
+                        [_lambda, args, exprs @ ..] => self.build_lambda(args, exprs),
+                        _ => Err(IrError::BadLambda(*span)),
+                    },
                     _ => self.build_function_call(*span, children.as_slice()),
                 }
             }
@@ -101,13 +105,40 @@ impl<'a> IrBuilder<'a> {
             [] => Err(IrError::EmptyFunctionCall(span)),
             [f, arg_asts @ ..] => {
                 let function = self.arena.alloc(self.build(f)?);
-                let mut args = BumpVec::with_capacity_in(arg_asts.len(), &self.arena);
+                let mut args = BumpVec::with_capacity_in(arg_asts.len(), self.arena);
                 for a in arg_asts {
                     args.push(self.build(a)?);
                 }
                 Ok(Ir::FunctionCall { function, args })
             }
         }
+    }
+
+    fn build_lambda(&self, args: &Ast, exprs: &[Ast]) -> Result<Ir<'a>, IrError> {
+        let args = match args {
+            Ast::Tree { children, .. } => {
+                let mut parsed_args = BumpVec::with_capacity_in(children.len(), self.arena);
+                for arg in children {
+                    match arg {
+                        Ast::Leaf { span } => match ParsedText::new(span.text(self.source)) {
+                            ParsedText::Identifier(ident) => parsed_args.push(ident),
+                            ParsedText::Constant(_) => todo!(),
+                        },
+                        Ast::Tree { .. } => todo!(),
+                    }
+                }
+                parsed_args
+            }
+            Ast::Leaf { .. } => todo!(),
+        };
+        let mut ir_exprs = BumpVec::with_capacity_in(exprs.len(), self.arena);
+        for expr in exprs {
+            ir_exprs.push(self.build(expr)?);
+        }
+        Ok(Ir::Lambda {
+            args,
+            exprs: ir_exprs,
+        })
     }
 
     fn build_define(&self, symbol: &Ast, expr: &Ast) -> Result<Ir<'a>, IrError> {
@@ -134,37 +165,5 @@ impl<'a> Ir<'a> {
     pub fn with_ast(source: &'a str, ast: &Ast, arena: &'a Bump) -> Result<Ir<'a>, IrError> {
         let builder = IrBuilder { source, arena };
         builder.build(ast)
-    }
-}
-
-impl<'a> Ir<'a> {
-    pub fn compile(&self, symbols: &mut SymbolTable, instructions: &mut Vec<Instruction>) {
-        match self {
-            Ir::Constant(constant) => {
-                let c = match constant {
-                    Constant::Int(x) => Val::Int(*x),
-                    Constant::Float(x) => Val::Float(*x),
-                    Constant::Symbol(x) => Val::Symbol(symbols.symbol_id(x)),
-                };
-                instructions.push(Instruction::Push(c));
-            }
-            Ir::Deref(ident) => {
-                let symbol = symbols.symbol_id(ident);
-                instructions.push(Instruction::Deref(symbol));
-            }
-            Ir::FunctionCall { function, args } => {
-                function.compile(symbols, instructions);
-                for arg in args {
-                    arg.compile(symbols, instructions);
-                }
-                instructions.push(Instruction::Eval(1 + args.len()));
-            }
-            Ir::Define { symbol, expr } => {
-                instructions.push(Instruction::Deref(symbols.symbol_id("%define")));
-                instructions.push(Instruction::Push(Val::Symbol(symbols.symbol_id(symbol))));
-                expr.compile(symbols, instructions);
-                instructions.push(Instruction::Eval(3));
-            }
-        }
     }
 }

@@ -5,9 +5,21 @@
 
 ** Functions
 
-*** Define Custom Functions
+*** TODO Define Custom Functions
 
-*** Capture variables in Lambdas
+**** DONE Lamba Syntax
+
+#+BEGIN_SRC lisp
+  (define x (lambda (a b c) (+ a b c)))
+#+END_SRC
+
+**** TODO Define Syntax
+
+#+BEGIN_SRC lisp
+  (define (x a b c) (+ a b c))
+#+END_SRC
+
+*** TODO Capture variables in Lambdas
 
 ** TODO Datatypes
 

@@ -1,6 +1,6 @@
 use crate::{
     val::{functions::NativeFunction, Val},
-    vm::{Vm, VmResult},
+    vm::{Vm, VmError, VmResult},
 };
 
 pub fn register_builtins(vm: &mut Vm) -> &mut Vm {
@@ -16,7 +16,7 @@ fn plus_fn(args: &[Val]) -> VmResult<Val> {
         match arg {
             Val::Int(x) => int_sum += *x,
             Val::Float(x) => float_sum += *x,
-            v => todo!("{v:?} not handled in + operator"),
+            _ => return Err(VmError::WrongType),
         }
     }
     let res = if float_sum == 0.0 {
@@ -29,7 +29,7 @@ fn plus_fn(args: &[Val]) -> VmResult<Val> {
 
 fn define_fn(vm: &mut Vm) -> VmResult<Val> {
     let (sym, val) = match vm.args() {
-        [Val::Symbol(sym), val] => (sym.clone(), val.clone()),
+        [Val::Symbol(sym), val] => (*sym, *val),
         _ => todo!(),
     };
     vm.globals.values.insert(sym, val);
