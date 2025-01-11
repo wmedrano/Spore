@@ -71,7 +71,7 @@ impl<'a> Compiler<'a> {
             }
             Ir::FunctionCall { function, args } => {
                 self.compile(dst, function);
-                for arg in args {
+                for arg in args.iter() {
                     self.compile(dst, arg);
                 }
                 dst.push(Instruction::Eval(1 + args.len()));
@@ -89,7 +89,7 @@ impl<'a> Compiler<'a> {
             Ir::Lambda { args, exprs } => {
                 let mut compiler = Compiler { vm: self.vm, args };
                 let mut lambda_instructions = Vec::new();
-                for expr in exprs {
+                for expr in exprs.iter() {
                     compiler.compile(&mut lambda_instructions, expr);
                 }
                 let lambda = ByteCodeFunction {

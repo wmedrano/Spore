@@ -21,6 +21,10 @@
 
 *** TODO Capture variables in Lambdas
 
+** TODO Garbage collector
+
+Unreferenced functions should be cleaned up.
+
 ** TODO Datatypes
 
 *** TODO Custom types

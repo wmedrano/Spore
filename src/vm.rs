@@ -1,6 +1,7 @@
 use bumpalo::Bump;
 
 use crate::{
+    builtins::register_builtins,
     compiler::CompileError,
     instruction::Instruction,
     module::Module,
@@ -34,6 +35,20 @@ struct StackFrame {
     stack_start: usize,
     bytecode_idx: usize,
     function: ByteCodeFunction,
+}
+
+impl Default for Vm {
+    fn default() -> Vm {
+        let mut vm = Vm {
+            globals: Module::new(),
+            stack: Vec::with_capacity(4096),
+            stack_frame: StackFrame::default(),
+            previous_stack_frames: Vec::with_capacity(64),
+            objects: Objects::default(),
+        };
+        register_builtins(&mut vm);
+        vm
+    }
 }
 
 impl Vm {

@@ -10,15 +10,15 @@ pub enum Ir<'a> {
     Deref(&'a str),
     FunctionCall {
         function: &'a Ir<'a>,
-        args: BumpVec<'a, Ir<'a>>,
+        args: &'a [Self],
     },
     Define {
         symbol: &'a str,
         expr: &'a Ir<'a>,
     },
     Lambda {
-        args: BumpVec<'a, &'a str>,
-        exprs: BumpVec<'a, Ir<'a>>,
+        args: &'a [&'a str],
+        exprs: &'a [Self],
     },
 }
 
@@ -109,7 +109,10 @@ impl<'a> IrBuilder<'a> {
                 for a in arg_asts {
                     args.push(self.build(a)?);
                 }
-                Ok(Ir::FunctionCall { function, args })
+                Ok(Ir::FunctionCall {
+                    function,
+                    args: args.into_bump_slice(),
+                })
             }
         }
     }
@@ -136,8 +139,8 @@ impl<'a> IrBuilder<'a> {
             ir_exprs.push(self.build(expr)?);
         }
         Ok(Ir::Lambda {
-            args,
-            exprs: ir_exprs,
+            args: args.into_bump_slice(),
+            exprs: ir_exprs.into_bump_slice(),
         })
     }
 
