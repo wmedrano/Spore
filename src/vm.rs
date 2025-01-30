@@ -5,7 +5,7 @@ use crate::{
     compiler::CompileError,
     instruction::Instruction,
     module::Module,
-    object_store::TypedObjectStore,
+    object_store::{GcColor, TypedObjectStore},
     val::{
         functions::{ByteCodeFunction, NativeFunction},
         symbol::{SymbolId, SymbolTable},
@@ -24,6 +24,7 @@ pub struct Vm {
 
 #[derive(Debug, Default)]
 pub struct Objects {
+    pub reachable_color: GcColor,
     pub native_functions: TypedObjectStore<NativeFunction>,
     pub bytecode_functions: TypedObjectStore<ByteCodeFunction>,
     pub symbols: SymbolTable,
@@ -31,7 +32,7 @@ pub struct Objects {
 }
 
 #[derive(Debug, Default)]
-struct StackFrame {
+pub struct StackFrame {
     stack_start: usize,
     bytecode_idx: usize,
     function: ByteCodeFunction,
@@ -59,7 +60,10 @@ impl Vm {
             "register_function called with existing function named {name}.",
             name = f.name()
         );
-        let id = self.objects.native_functions.register(f);
+        let id = self
+            .objects
+            .native_functions
+            .register(f, self.objects.reachable_color.swap());
         self.globals.values.insert(symbol, Val::NativeFunction(id));
         self
     }
@@ -93,6 +97,13 @@ impl From<CompileError> for VmError {
 
 impl Vm {
     pub fn eval_str(&mut self, s: &str) -> VmResult<Val> {
+        self.objects.run_gc(
+            &self.stack,
+            self.previous_stack_frames
+                .iter()
+                .chain(std::iter::once(&self.stack_frame)),
+            &self.globals,
+        );
         let bytecode = ByteCodeFunction::with_str(self, s, &Bump::new())?;
         self.eval(bytecode)
     }
@@ -217,6 +228,80 @@ impl Vm {
             v => return Err(VmError::NotCallable(v)),
         }
         Ok(())
+    }
+}
+
+impl Objects {
+    pub fn run_gc<'a>(
+        &mut self,
+        stack: &[Val],
+        stack_frames: impl Iterator<Item = &'a StackFrame>,
+        globals: &Module,
+    ) {
+        self.mark(stack, stack_frames, globals);
+        self.sweep();
+    }
+
+    fn mark<'a>(
+        &mut self,
+        stack: &[Val],
+        stack_frames: impl Iterator<Item = &'a StackFrame>,
+        globals: &Module,
+    ) {
+        let mut queue: Vec<_> = stack
+            .iter()
+            .chain(globals.values.values())
+            .cloned()
+            .collect();
+        for frame in stack_frames {
+            for instruction in frame.function.instructions.iter() {
+                match instruction {
+                    Instruction::Push(v) => queue.push(*v),
+                    Instruction::Eval(_)
+                    | Instruction::Get(_)
+                    | Instruction::Deref(_)
+                    | Instruction::Return => {}
+                }
+            }
+        }
+        let mut next_queue = Vec::new();
+        while !queue.is_empty() {
+            for v in queue.drain(..) {
+                self.mark_one(v, &mut next_queue);
+            }
+            std::mem::swap(&mut queue, &mut next_queue);
+        }
+    }
+
+    fn mark_one(&mut self, val: Val, queue: &mut Vec<Val>) {
+        match val {
+            Val::NativeFunction(id) => {
+                self.native_functions.maybe_color(id, self.reachable_color);
+            }
+            Val::BytecodeFunction(id) => {
+                if let Some(f) = self
+                    .bytecode_functions
+                    .maybe_color(id, self.reachable_color)
+                {
+                    for instruction in f.instructions.iter() {
+                        match instruction {
+                            Instruction::Push(v) => queue.push(*v),
+                            Instruction::Eval(_)
+                            | Instruction::Get(_)
+                            | Instruction::Deref(_)
+                            | Instruction::Return => {}
+                        }
+                    }
+                }
+            }
+            Val::Void | Val::Int(_) | Val::Float(_) | Val::Symbol(_) => (),
+        }
+    }
+
+    fn sweep(&mut self) {
+        self.reachable_color = self.reachable_color.swap();
+        self.native_functions.sweep_color(self.reachable_color);
+        self.bytecode_functions.sweep_color(self.reachable_color);
     }
 }
 

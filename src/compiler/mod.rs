@@ -96,7 +96,11 @@ impl<'a> Compiler<'a> {
                     instructions: lambda_instructions.into(),
                     args: args.len() as u32,
                 };
-                let lambda_id = self.vm.objects.bytecode_functions.register(lambda);
+                let lambda_id = self
+                    .vm
+                    .objects
+                    .bytecode_functions
+                    .register(lambda, self.vm.objects.reachable_color.swap());
                 dst.push(Instruction::Push(Val::BytecodeFunction(lambda_id)));
             }
         }
