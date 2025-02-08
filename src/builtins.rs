@@ -10,6 +10,7 @@ pub fn register_builtins(vm: &mut Vm) -> &mut Vm {
         .register_native_function(NativeFunction::with_args("do", do_fn))
 }
 
+/// Adds the given arguments.
 fn plus_fn(args: &[Val]) -> VmResult<Val> {
     let mut int_sum = 0;
     let mut float_sum = 0.0;
@@ -28,6 +29,7 @@ fn plus_fn(args: &[Val]) -> VmResult<Val> {
     Ok(res)
 }
 
+/// Defines a symbol in the global scope.
 fn define_fn(vm: &mut Vm) -> VmResult<Val> {
     let (sym, val) = match vm.args() {
         [Val::Symbol(sym), val] => (*sym, *val),
@@ -37,6 +39,7 @@ fn define_fn(vm: &mut Vm) -> VmResult<Val> {
     Ok(Val::Void)
 }
 
+/// Returns the last value in the list of arguments.
 fn do_fn(args: &[Val]) -> VmResult<Val> {
     Ok(args.last().copied().unwrap_or(Val::Void))
 }

@@ -10,6 +10,7 @@ impl<T> PartialEq for ObjectId<T> {
 }
 
 #[derive(Debug)]
+/// A colored object.
 pub struct ColoredObject<T> {
     object: T,
     color: GcColor,
@@ -43,7 +44,7 @@ impl<T> Eq for ObjectId<T> {}
 impl<T> Copy for ObjectId<T> {}
 impl<T> Clone for ObjectId<T> {
     fn clone(&self) -> Self {
-        ObjectId(self.0, PhantomData)
+        *self
     }
 }
 

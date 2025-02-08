@@ -8,6 +8,7 @@ pub struct Span {
 }
 
 impl Span {
+    /// Returns the text of the span.
     pub fn text(self, source: &str) -> &str {
         &source[self.start as usize..self.end as usize]
     }

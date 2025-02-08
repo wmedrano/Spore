@@ -45,6 +45,7 @@ struct Compiler<'a> {
 }
 
 impl<'a> Compiler<'a> {
+    /// Returns the index of a symbol in the argument list, if it exists.
     fn deref_idx(&self, symbol: &str) -> Option<usize> {
         for (i, arg) in self.args.iter().enumerate() {
             if *arg == symbol {
@@ -54,6 +55,7 @@ impl<'a> Compiler<'a> {
         None
     }
 
+    /// Compiles an IR into bytecode instructions.
     fn compile(&mut self, dst: &mut Vec<Instruction>, ir: &Ir) {
         match ir {
             Ir::Constant(constant) => {

@@ -35,9 +35,13 @@ pub struct Vm {
 pub struct Objects {
     /// The color used to mark reachable objects during GC.
     pub reachable_color: GcColor,
+    /// The store for native functions.
     pub native_functions: TypedObjectStore<NativeFunction>,
+    /// The store for bytecode functions.
     pub bytecode_functions: TypedObjectStore<ByteCodeFunction>,
+    /// The symbol table.
     pub symbols: SymbolTable,
+    /// The null bytecode function.
     pub null_bytecode: ByteCodeFunction,
 }
 
@@ -281,6 +285,9 @@ impl Vm {
 }
 
 impl Objects {
+    /// Runs garbage collection.
+    ///
+    /// This function initiates a garbage collection cycle, marking reachable objects and then sweeping unreachable objects.
     pub fn run_gc<'a>(
         &mut self,
         stack: &[Val],
@@ -368,26 +375,26 @@ mod tests {
     use super::*;
 
     #[test]
-    fn function_call() {
+    fn function_call_calls_function_with_args() {
         assert_eq!(Vm::default().eval_str("(+ 1 2 3 4)").unwrap(), Val::Int(10));
     }
 
     #[test]
-    fn define() {
+    fn define_sets_value_of_symbol() {
         let mut vm = Vm::default();
         assert_eq!(vm.eval_str("(define x 12)").unwrap(), Val::Void);
         assert_eq!(vm.eval_str("x").unwrap(), Val::Int(12));
     }
 
     #[test]
-    fn define_function() {
+    fn define_lambda_creates_callable_function() {
         let mut vm = Vm::default();
         assert_eq!(vm.eval_str("(define x (lambda () 12))").unwrap(), Val::Void);
         assert_eq!(vm.eval_str("(x)").unwrap(), Val::Int(12));
     }
 
     #[test]
-    fn define_function_with_args() {
+    fn define_lambda_with_args_creates_callable_function() {
         let mut vm = Vm::default();
         assert_eq!(
             vm.eval_str("(define x (lambda (a b c) (+ a b c)))")
@@ -398,15 +405,34 @@ mod tests {
     }
 
     #[test]
+    fn define_creates_callable_function() {
+        let mut vm = Vm::default();
+        assert_eq!(
+            vm.eval_str("(define (foo) (+ 1 2 3 4))").unwrap(),
+            Val::Void,
+        );
+        assert_eq!(vm.eval_str("(foo)").unwrap(), Val::Int(10));
+    }
+
+    #[test]
+    fn define_with_args_creates_callable_function() {
+        let mut vm = Vm::default();
+        assert_eq!(
+            vm.eval_str("(define (foo a b c) (+ a b c))").unwrap(),
+            Val::Void,
+        );
+        assert_eq!(vm.eval_str("(foo 1 2 3)").unwrap(), Val::Int(6));
+    }
+
+    #[test]
     fn function_with_wrong_number_of_args_fails() {
         let mut vm = Vm::default();
         assert_eq!(
-            vm.eval_str("(define x (lambda (a b c) (+ a b c)))")
-                .unwrap(),
+            vm.eval_str("(define (foo a b c) (+ a b c))").unwrap(),
             Val::Void
         );
         assert_eq!(
-            vm.eval_str("(x 1)").unwrap_err(),
+            vm.eval_str("(foo 1)").unwrap_err(),
             VmError::WrongArity {
                 expected: 3,
                 actual: 1

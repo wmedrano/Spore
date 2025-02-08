@@ -9,15 +9,22 @@ use crate::{object_store::ObjectId, vm::Vm};
 #[derive(Copy, Clone, Debug, PartialEq)]
 /// Represents a value in the VM.
 pub enum Val {
+    /// Represents the lack of a value.
     Void,
+    /// Represents an integer.
     Int(i64),
+    /// Represents a floating-point number.
     Float(f64),
+    /// Represents a symbol.
     Symbol(SymbolId),
+    /// Represents a native function.
     NativeFunction(ObjectId<NativeFunction>),
+    /// Represents a bytecode function.
     BytecodeFunction(ObjectId<ByteCodeFunction>),
 }
 
 impl Val {
+    /// Creates a formatter for the value.
     pub fn formatter(self, vm: &Vm) -> ValFormatter {
         ValFormatter { vm, val: self }
     }

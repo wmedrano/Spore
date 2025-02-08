@@ -7,23 +7,29 @@ use super::span::Span;
 pub struct Token {
     /// The span of the token in the source code.
     pub span: Span,
+    /// The type of the token.
     pub token_type: TokenType,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 /// Represents the type of a token.
 pub enum TokenType {
+    /// An open parenthesis.
     OpenParen,
+    /// A close parenthesis.
     CloseParen,
+    /// An identifier.
     Identifier,
 }
 
 impl Token {
+    /// Returns the text of the token.
     pub fn text(self, source: &str) -> &str {
         self.span.text(source)
     }
 }
 
+/// Tokenizes a string of source code.
 pub fn tokenize(source: &str) -> impl '_ + Iterator<Item = Token> {
     let mut source_iter = source.char_indices().peekable();
     std::iter::from_fn(move || loop {
@@ -52,6 +58,7 @@ pub fn tokenize(source: &str) -> impl '_ + Iterator<Item = Token> {
     })
 }
 
+/// Parses a token from the source code.
 fn parse_token(start: u32, source_iter: &mut Peekable<CharIndices>) -> Token {
     let mut end = start;
     loop {
@@ -105,7 +112,8 @@ mod tests {
 
     #[test]
     fn whitespace_is_empty() {
-        assert_eq!(tokenize_to_vec(" \n \t "), Vec::<_>::new());
+        assert_eq!(tokenize_to_vec(" 
+ 	 "), Vec::<_>::new());
     }
 
     #[test]

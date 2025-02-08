@@ -15,33 +15,33 @@ pub enum Ast {
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 /// Represents an error that can occur during AST building.
 pub enum AstError {
+    /// Represents an unclosed parenthesis.
     UnclosedParen(Span),
+    /// Represents an unexpected close parenthesis.
     UnexpectedCloseParen(Span),
 }
 
 impl Ast {
+    /// Creates a vector of ASTs from a source string.
     pub fn with_source(source: &str) -> Vec<Self> {
         let mut asts = Vec::new();
         let mut tokens = tokenize(source);
-        while let Some(ast) = Ast::next_ast(source, &mut tokens) {
+        while let Some(ast) = Ast::next_ast(&mut tokens) {
             asts.push(ast.unwrap());
         }
         asts
     }
 
-    fn next_ast(
-        source: &str,
-        tokens: &mut impl Iterator<Item = Token>,
-    ) -> Option<Result<Self, AstError>> {
+    /// Parses the next AST from the token stream.
+    fn next_ast(tokens: &mut impl Iterator<Item = Token>) -> Option<Result<Self, AstError>> {
         let token = tokens.next()?;
         match token.token_type {
             TokenType::Identifier => Some(Ok(Ast::Leaf { span: token.span })),
             TokenType::OpenParen => {
-                let (sub_span, sub_ast) =
-                    match Ast::parse_until_close(source, token.span.start, tokens) {
-                        Ok(x) => x,
-                        Err(err) => return Some(Err(err)),
-                    };
+                let (sub_span, sub_ast) = match Ast::parse_until_close(token.span.start, tokens) {
+                    Ok(x) => x,
+                    Err(err) => return Some(Err(err)),
+                };
                 Some(Ok(Ast::Tree {
                     span: sub_span,
                     children: sub_ast,
@@ -51,8 +51,8 @@ impl Ast {
         }
     }
 
+    /// Parses ASTs until a closing parenthesis is encountered.
     fn parse_until_close(
-        source: &str,
         span_start: u32,
         tokens: &mut impl Iterator<Item = Token>,
     ) -> Result<(Span, Vec<Self>), AstError> {
@@ -61,8 +61,7 @@ impl Ast {
             match token.token_type {
                 TokenType::Identifier => asts.push(Ast::Leaf { span: token.span }),
                 TokenType::OpenParen => {
-                    let (sub_span, sub_ast) =
-                        Ast::parse_until_close(source, token.span.start, tokens)?;
+                    let (sub_span, sub_ast) = Ast::parse_until_close(token.span.start, tokens)?;
                     asts.push(Ast::Tree {
                         span: sub_span,
                         children: sub_ast,
@@ -85,6 +84,7 @@ impl Ast {
 }
 
 impl Ast {
+    /// Returns the span of the AST.
     pub fn span(&self) -> Span {
         match self {
             Ast::Leaf { span } => *span,
@@ -92,6 +92,7 @@ impl Ast {
         }
     }
 
+    /// Returns the text of the leaf node.
     pub fn leaf_text<'a>(&self, source: &'a str) -> Option<&'a str> {
         match self {
             Ast::Leaf { span } => Some(span.text(source)),
