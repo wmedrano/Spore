@@ -14,16 +14,26 @@ use crate::{
 };
 
 #[derive(Debug)]
+/// The virtual machine.
+///
+/// The Vm struct represents the virtual machine that executes bytecode.
 pub struct Vm {
+    /// The global module.
     pub(crate) globals: Module,
     stack: Vec<Val>,
     stack_frame: StackFrame,
     previous_stack_frames: Vec<StackFrame>,
+    /// The object store.
     pub(crate) objects: Objects,
 }
 
 #[derive(Debug, Default)]
+/// Stores all the heap allocated objects.
+///
+/// The Objects struct manages the heap allocated objects, including native functions,
+/// bytecode functions, and symbols. It also handles garbage collection.
 pub struct Objects {
+    /// The color used to mark reachable objects during GC.
     pub reachable_color: GcColor,
     pub native_functions: TypedObjectStore<NativeFunction>,
     pub bytecode_functions: TypedObjectStore<ByteCodeFunction>,
@@ -53,6 +63,11 @@ impl Default for Vm {
 }
 
 impl Vm {
+    /// Registers a native function in the VM.
+    ///
+    /// This function registers a native (Rust) function with the VM, making it callable
+    /// from spore code. It checks for name conflicts and adds the function to the
+    /// global module.
     pub fn register_native_function(&mut self, f: NativeFunction) -> &mut Self {
         let symbol = self.objects.symbols.symbol_id(f.name());
         assert!(
@@ -68,17 +83,28 @@ impl Vm {
         self
     }
 
+    /// Returns the arguments passed to the current function.
+    ///
+    /// This function returns a slice of `Val` representing the arguments passed to the
+    /// currently executing function. The slice is valid for the duration of the function
+    /// call.
     pub fn args(&self) -> &[Val] {
         let start = self.stack_frame.stack_start;
         &self.stack[start..]
     }
 
+    /// Looks up the name of a symbol.
+    ///
+    /// Given a `SymbolId`, this function attempts to retrieve the corresponding name
+    /// from the symbol table. It returns `Some(&str)` if the symbol is found, and `None`
+    /// otherwise.
     pub fn symbol_name(&self, symbol_id: SymbolId) -> Option<&str> {
         self.objects.symbols.symbol_name(symbol_id)
     }
 }
 
 #[derive(Debug, PartialEq)]
+/// Represents errors that can occur during VM execution.
 pub enum VmError {
     Compile(CompileError),
     SymbolNotFound(SymbolId),
@@ -87,6 +113,7 @@ pub enum VmError {
     WrongArity { expected: u32, actual: u32 },
 }
 
+/// The result type for VM operations.
 pub type VmResult<T> = Result<T, VmError>;
 
 impl From<CompileError> for VmError {
@@ -96,6 +123,11 @@ impl From<CompileError> for VmError {
 }
 
 impl Vm {
+    /// Evaluates a string of code.
+    ///
+    /// This function takes a string of spore code, compiles it into bytecode, and then
+    /// executes the bytecode in the VM. It returns the resulting `Val` or an error
+    /// if compilation or execution fails.
     pub fn eval_str(&mut self, s: &str) -> VmResult<Val> {
         self.objects.run_gc(
             &self.stack,
@@ -108,6 +140,11 @@ impl Vm {
         self.eval(bytecode)
     }
 
+    /// Evaluates a pre-compiled bytecode function.
+    ///
+    /// This function executes a pre-compiled `ByteCodeFunction` within the VM. It sets up
+    /// a new stack frame, executes the bytecode instructions, and returns the resulting
+    /// `Val` or an error if execution fails.
     pub fn eval(&mut self, bytecode: ByteCodeFunction) -> VmResult<Val> {
         assert_eq!(bytecode.args, 0);
         let initial_stack_frames = self.previous_stack_frames.len();
@@ -127,6 +164,10 @@ impl Vm {
         Ok(res)
     }
 
+    /// Executes the next instruction in the current stack frame.
+    ///
+    /// This function retrieves the next instruction from the current bytecode function
+    /// and executes it. It handles various instructions such as `Push`, `Eval`, `Get`, `Deref`, and `Return`.
     fn run_next(&mut self) -> VmResult<()> {
         let bytecode_idx = self.stack_frame.bytecode_idx;
         self.stack_frame.bytecode_idx = bytecode_idx + 1;
@@ -156,6 +197,10 @@ impl Vm {
         Ok(())
     }
 
+    /// Executes a return instruction.
+    ///
+    /// This function handles the `Return` instruction, which involves restoring the previous
+    /// stack frame, retrieving the return value, and updating the stack.
     fn execute_return(&mut self) {
         let stack_start = self.stack_frame.stack_start;
         match self.previous_stack_frames.pop() {
@@ -175,6 +220,10 @@ impl Vm {
         }
     }
 
+    /// Executes the `Eval` instruction.
+    ///
+    /// This function handles the `Eval` instruction, which is responsible for function calls.
+    /// It retrieves the function to be called, sets up a new stack frame, and executes the function.
     fn execute_eval(&mut self, n: usize) -> VmResult<()> {
         let function_idx = self.stack.len() - n;
         let stack_start = function_idx + 1;
@@ -242,6 +291,9 @@ impl Objects {
         self.sweep();
     }
 
+    /// Marks reachable objects during garbage collection.
+    ///
+    /// This function recursively marks all reachable objects, starting from the stack, stack frames, and globals.
     fn mark<'a>(
         &mut self,
         stack: &[Val],
@@ -273,6 +325,9 @@ impl Objects {
         }
     }
 
+    /// Marks a single value as reachable.
+    ///
+    /// This function marks a single `Val` as reachable by setting the appropriate color in the object store.
     fn mark_one(&mut self, val: Val, queue: &mut Vec<Val>) {
         match val {
             Val::NativeFunction(id) => {
@@ -298,6 +353,9 @@ impl Objects {
         }
     }
 
+    /// Sweeps the object store to collect garbage.
+    ///
+    /// This function sweeps the object store, collecting any objects that are not marked with the current reachable color.
     fn sweep(&mut self) {
         self.reachable_color = self.reachable_color.swap();
         self.native_functions.sweep_color(self.reachable_color);

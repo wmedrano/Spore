@@ -7,6 +7,7 @@ use symbol::SymbolId;
 use crate::{object_store::ObjectId, vm::Vm};
 
 #[derive(Copy, Clone, Debug, PartialEq)]
+/// Represents a value in the VM.
 pub enum Val {
     Void,
     Int(i64),
@@ -22,6 +23,7 @@ impl Val {
     }
 }
 
+/// A formatter for values that uses the VM to resolve symbols.
 pub struct ValFormatter<'a> {
     vm: &'a Vm,
     val: Val,

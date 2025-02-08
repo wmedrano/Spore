@@ -15,10 +15,12 @@ pub mod span;
 pub mod tokenizer;
 
 #[derive(Debug, PartialEq)]
+/// Represents an error that can occur during compilation.
 pub enum CompileError {
     Ir(IrError),
 }
 
+/// Compiles a string of source code into bytecode instructions.
 pub fn compile<'a>(
     vm: &mut Vm,
     source: &'a str,

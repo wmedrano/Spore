@@ -5,17 +5,23 @@ use super::{ast::Ast, span::Span};
 type BumpVec<'a, T> = bumpalo::collections::Vec<'a, T>;
 
 #[derive(Debug)]
+/// Represents the intermediate representation of the code.
 pub enum Ir<'a> {
+/// A constant value.
     Constant(Constant<'a>),
+    /// A variable dereference.
     Deref(&'a str),
+    /// A function call.
     FunctionCall {
         function: &'a Ir<'a>,
         args: &'a [Self],
     },
+    /// A define expression.
     Define {
         symbol: &'a str,
         expr: &'a Ir<'a>,
     },
+    /// A lambda expression.
     Lambda {
         args: &'a [&'a str],
         exprs: &'a [Self],
@@ -23,6 +29,7 @@ pub enum Ir<'a> {
 }
 
 #[derive(Debug)]
+/// Represents a constant value.
 pub enum Constant<'a> {
     Int(i64),
     Float(f64),
@@ -53,6 +60,7 @@ impl<'a> ParsedText<'a> {
 }
 
 #[derive(Debug, PartialEq)]
+/// Represents an error that can occur during IR building.
 pub enum IrError {
     EmptyFunctionCall(Span),
     ConstantNotCallable(Span),

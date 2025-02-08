@@ -1,6 +1,9 @@
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
+/// Represents a span of text in the source code.
 pub struct Span {
+    /// The start index of the span.
     pub start: u32,
+    /// The end index of the span.
     pub end: u32,
 }
 

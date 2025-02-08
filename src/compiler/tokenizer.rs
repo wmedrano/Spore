@@ -3,12 +3,15 @@ use std::{iter::Peekable, str::CharIndices};
 use super::span::Span;
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
+/// Represents a token in the source code.
 pub struct Token {
+    /// The span of the token in the source code.
     pub span: Span,
     pub token_type: TokenType,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
+/// Represents the type of a token.
 pub enum TokenType {
     OpenParen,
     CloseParen,

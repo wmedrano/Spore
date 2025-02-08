@@ -4,12 +4,16 @@ use super::{
 };
 
 #[derive(Clone, Debug, PartialEq)]
+/// Represents an Abstract Syntax Tree.
 pub enum Ast {
+    /// Represents a tree node with a span and children.
     Tree { span: Span, children: Vec<Ast> },
+    /// Represents a leaf node with a span.
     Leaf { span: Span },
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+/// Represents an error that can occur during AST building.
 pub enum AstError {
     UnclosedParen(Span),
     UnexpectedCloseParen(Span),
