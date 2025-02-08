@@ -1,0 +1,3 @@
+Run unit tests with `cargo test` or `cargo test <test-name>`. Run unit tests when finalizing changes.
+
+Unit tests should follow the form <scenario>_<expectation>.
