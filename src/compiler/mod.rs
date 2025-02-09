@@ -8,6 +8,7 @@ use crate::{
     vm::Vm,
     SporeRc,
 };
+use crate::builtins;
 
 pub mod ast;
 mod ir;
@@ -82,7 +83,7 @@ impl<'a> Compiler<'a> {
             }
             Ir::Define { symbol, expr } => {
                 dst.push(Instruction::Deref(
-                    self.vm.objects.symbols.symbol_id("%define"),
+                    self.vm.objects.symbols.symbol_id(builtins::INTERNAL_DEFINE_FUNCTION),
                 ));
                 dst.push(Instruction::Push(Val::Symbol(
                     self.vm.objects.symbols.symbol_id(symbol),

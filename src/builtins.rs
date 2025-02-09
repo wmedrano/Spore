@@ -1,3 +1,6 @@
+/// The internal symbol used to define a new value.
+pub const INTERNAL_DEFINE_FUNCTION: &str = "%define";
+
 use crate::{
     val::{functions::NativeFunction, Val},
     vm::{Vm, VmError, VmResult},
@@ -6,7 +9,7 @@ use crate::{
 /// Registers the built-in functions in the VM.
 pub fn register_builtins(vm: &mut Vm) -> &mut Vm {
     vm.register_native_function(NativeFunction::with_args("+", plus_fn))
-        .register_native_function(NativeFunction::new("%define", define_fn))
+        .register_native_function(NativeFunction::new(INTERNAL_DEFINE_FUNCTION, define_fn))
         .register_native_function(NativeFunction::with_args("do", do_fn))
 }
 
