@@ -112,8 +112,13 @@ mod tests {
 
     #[test]
     fn whitespace_is_empty() {
-        assert_eq!(tokenize_to_vec(" 
- 	 "), Vec::<_>::new());
+        assert_eq!(
+            tokenize_to_vec(
+                " 
+ 	 "
+            ),
+            Vec::<_>::new()
+        );
     }
 
     #[test]

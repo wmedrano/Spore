@@ -218,7 +218,7 @@ impl<'a> IrBuilder<'a> {
 #[cfg(test)]
 mod tests {
     use super::super::ast::Ast;
-    
+
     use super::*;
     use bumpalo::Bump;
 

@@ -307,29 +307,36 @@ impl Objects {
         stack_frames: impl Iterator<Item = &'a StackFrame>,
         globals: &Module,
     ) {
-        let mut queue: Vec<_> = stack
-            .iter()
-            .chain(globals.values.values())
-            .cloned()
-            .collect();
+        let (mut queue, mut tmp_queue) = (Vec::new(), Vec::new());
+        self.mark_many(stack.iter().copied(), &mut queue, &mut tmp_queue);
+        self.mark_many(globals.values.values().copied(), &mut queue, &mut tmp_queue);
         for frame in stack_frames {
             for instruction in frame.function.instructions.iter() {
-                match instruction {
-                    Instruction::Push(v) => queue.push(*v),
-                    Instruction::Eval(_)
-                    | Instruction::Get(_)
-                    | Instruction::Deref(_)
-                    | Instruction::Return => {}
-                }
+                Self::mark_instruction(instruction, &mut queue);
             }
         }
-        let mut next_queue = Vec::new();
+        self.exhaust_queue(&mut queue, &mut tmp_queue);
+    }
+
+    fn exhaust_queue(&mut self, queue: &mut Vec<Val>, tmp_queue: &mut Vec<Val>) {
         while !queue.is_empty() {
             for v in queue.drain(..) {
-                self.mark_one(v, &mut next_queue);
+                self.mark_one(v, tmp_queue);
             }
-            std::mem::swap(&mut queue, &mut next_queue);
+            std::mem::swap(queue, tmp_queue);
         }
+    }
+
+    fn mark_many(
+        &mut self,
+        vals: impl Iterator<Item = Val>,
+        queue: &mut Vec<Val>,
+        tmp_queue: &mut Vec<Val>,
+    ) {
+        for v in vals {
+            self.mark_one(v, queue);
+        }
+        self.exhaust_queue(queue, tmp_queue)
     }
 
     /// Marks a single value as reachable.
@@ -346,17 +353,21 @@ impl Objects {
                     .maybe_color(id, self.reachable_color)
                 {
                     for instruction in f.instructions.iter() {
-                        match instruction {
-                            Instruction::Push(v) => queue.push(*v),
-                            Instruction::Eval(_)
-                            | Instruction::Get(_)
-                            | Instruction::Deref(_)
-                            | Instruction::Return => {}
-                        }
+                        Self::mark_instruction(instruction, queue);
                     }
                 }
             }
             Val::Void | Val::Int(_) | Val::Float(_) | Val::Symbol(_) => (),
+        }
+    }
+
+    fn mark_instruction(instruction: &Instruction, queue: &mut Vec<Val>) {
+        match instruction {
+            Instruction::Push(v) => queue.push(*v),
+            Instruction::Eval(_)
+            | Instruction::Get(_)
+            | Instruction::Deref(_)
+            | Instruction::Return => {}
         }
     }
 

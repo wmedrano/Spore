@@ -2,13 +2,13 @@ use ast::Ast;
 use bumpalo::Bump;
 use ir::{Constant, Ir, IrError};
 
+use crate::builtins;
 use crate::{
     instruction::Instruction,
     val::{functions::ByteCodeFunction, Val},
     vm::Vm,
     SporeRc,
 };
-use crate::builtins;
 
 pub mod ast;
 mod ir;
@@ -83,7 +83,10 @@ impl<'a> Compiler<'a> {
             }
             Ir::Define { symbol, expr } => {
                 dst.push(Instruction::Deref(
-                    self.vm.objects.symbols.symbol_id(builtins::INTERNAL_DEFINE_FUNCTION),
+                    self.vm
+                        .objects
+                        .symbols
+                        .symbol_id(builtins::INTERNAL_DEFINE_FUNCTION),
                 ));
                 dst.push(Instruction::Push(Val::Symbol(
                     self.vm.objects.symbols.symbol_id(symbol),

@@ -107,6 +107,74 @@ mod tests {
 
     #[test]
     fn empty_source_has_empty_ast() {
-        assert_eq!(Ast::with_source(""), Vec::<Ast>::new(),);
+        assert_eq!(Ast::with_source("").len(), 0);
+    }
+
+    #[test]
+    fn single_identifier_has_single_leaf() {
+        assert_eq!(
+            Ast::with_source("ident")[0],
+            Ast::Leaf {
+                span: Span { start: 0, end: 5 }
+            }
+        );
+    }
+
+    #[test]
+    fn several_items_make_list_of_leafs() {
+        assert_eq!(Ast::with_source("a b 1 two \"three\""), &[
+                Ast::Leaf { span: Span { start: 0, end: 1 } },
+                Ast::Leaf { span: Span { start: 2, end: 3 } },
+                Ast::Leaf { span: Span { start: 4, end: 5 } },
+                Ast::Leaf { span: Span { start: 6, end: 9 } },
+                Ast::Leaf { span: Span { start: 10, end: 17 } }
+            ]);
+    }
+
+    #[test]
+    fn parenthesis_make_tree() {
+        assert_eq!(
+            Ast::with_source("(1 2 3)"),
+            &[Ast::Tree {
+                span: Span { start: 0, end: 7 },
+                children: vec![
+                    Ast::Leaf {
+                        span: Span { start: 1, end: 2 }
+                    },
+                    Ast::Leaf {
+                        span: Span { start: 3, end: 4 }
+                    },
+                    Ast::Leaf {
+                        span: Span { start: 5, end: 6 }
+                    }
+                ]
+            }]
+        );
+    }
+
+    #[test]
+    fn nested_parenthesis_form_nested_trees() {
+        assert_eq!(
+            Ast::with_source("(foo (bar 3))"),
+            &[Ast::Tree {
+                span: Span { start: 0, end: 13 },
+                children: vec![
+                    Ast::Leaf {
+                        span: Span { start: 1, end: 4 }
+                    },
+                    Ast::Tree {
+                        span: Span { start: 5, end: 12 },
+                        children: vec![
+                            Ast::Leaf {
+                                span: Span { start: 6, end: 9 }
+                            },
+                            Ast::Leaf {
+                                span: Span { start: 10, end: 11 }
+                            }
+                        ]
+                    }
+                ]
+            }]
+        );
     }
 }

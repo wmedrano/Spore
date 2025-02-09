@@ -13,7 +13,7 @@
   (define x (lambda (a b c) (+ a b c)))
 #+END_SRC
 
-**** TODO Define Syntax
+**** DONE Define Syntax
 
 #+BEGIN_SRC lisp
   (define (x a b c) (+ a b c))
