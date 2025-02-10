@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use bumpalo::Bump;
 
 use crate::{
@@ -20,6 +22,7 @@ use crate::{
 pub struct Vm {
     /// The global module.
     pub(crate) globals: Module,
+    pub(crate) modules: HashMap<SymbolId, Module>,
     stack: Vec<Val>,
     stack_frame: StackFrame,
     previous_stack_frames: Vec<StackFrame>,
@@ -56,6 +59,7 @@ impl Default for Vm {
     fn default() -> Vm {
         let mut vm = Vm {
             globals: Module::new(),
+            modules: HashMap::new(),
             stack: Vec::with_capacity(4096),
             stack_frame: StackFrame::default(),
             previous_stack_frames: Vec::with_capacity(64),
