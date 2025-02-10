@@ -2,6 +2,11 @@ use std::collections::HashMap;
 
 use bumpalo::Bump;
 
+#[derive(Debug, PartialEq, Copy, Clone)]
+pub struct CommonSymbols {
+    global: SymbolId,
+}
+
 use crate::{
     builtins::register_builtins,
     compiler::CompileError,
@@ -20,6 +25,7 @@ use crate::{
 ///
 /// The Vm struct represents the virtual machine that executes bytecode.
 pub struct Vm {
+    common_symbols: CommonSymbols,
     pub(crate) modules: HashMap<SymbolId, Module>,
     stack: Vec<Val>,
     stack_frame: StackFrame,
@@ -55,12 +61,17 @@ pub struct StackFrame {
 
 impl Default for Vm {
     fn default() -> Vm {
+        let mut objects = Objects::default();
+        let common_symbols = CommonSymbols {
+            global: objects.symbols.symbol_id("%global"),
+        };
         let mut vm = Vm {
+            common_symbols,
             modules: HashMap::new(),
             stack: Vec::with_capacity(4096),
             stack_frame: StackFrame::default(),
             previous_stack_frames: Vec::with_capacity(64),
-            objects: Objects::default(),
+            objects,
         };
         vm.modules
             .insert(vm.objects.symbols.symbol_id("%global"), Module::new());
