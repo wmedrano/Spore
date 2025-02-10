@@ -20,8 +20,6 @@ use crate::{
 ///
 /// The Vm struct represents the virtual machine that executes bytecode.
 pub struct Vm {
-    /// The global module.
-    pub(crate) globals: Module,
     pub(crate) modules: HashMap<SymbolId, Module>,
     stack: Vec<Val>,
     stack_frame: StackFrame,
@@ -58,13 +56,14 @@ pub struct StackFrame {
 impl Default for Vm {
     fn default() -> Vm {
         let mut vm = Vm {
-            globals: Module::new(),
             modules: HashMap::new(),
             stack: Vec::with_capacity(4096),
             stack_frame: StackFrame::default(),
             previous_stack_frames: Vec::with_capacity(64),
             objects: Objects::default(),
         };
+        vm.modules
+            .insert(vm.objects.symbols.symbol_id("%global"), Module::new());
         register_builtins(&mut vm);
         vm
     }
@@ -77,9 +76,11 @@ impl Vm {
     /// from spore code. It checks for name conflicts and adds the function to the
     /// global module.
     pub fn register_native_function(&mut self, f: NativeFunction) -> &mut Self {
+        let globals_id = self.objects.symbols.symbol_id("%global");
         let symbol = self.objects.symbols.symbol_id(f.name());
+        let globals = self.modules.get_mut(&globals_id).unwrap();
         assert!(
-            !self.globals.values.contains_key(&symbol),
+            !globals.values.contains_key(&symbol),
             "register_function called with existing function named {name}.",
             name = f.name()
         );
@@ -87,7 +88,7 @@ impl Vm {
             .objects
             .native_functions
             .register(f, self.objects.reachable_color.swap());
-        self.globals.values.insert(symbol, Val::NativeFunction(id));
+        globals.values.insert(symbol, Val::NativeFunction(id));
         self
     }
 
@@ -108,6 +109,10 @@ impl Vm {
     /// otherwise.
     pub fn symbol_name(&self, symbol_id: SymbolId) -> Option<&str> {
         self.objects.symbols.symbol_name(symbol_id)
+    }
+
+    pub fn get_or_create_symbol_id(&mut self, name: &str) -> SymbolId {
+        self.objects.symbols.symbol_id(name)
     }
 }
 
@@ -142,7 +147,7 @@ impl Vm {
             self.previous_stack_frames
                 .iter()
                 .chain(std::iter::once(&self.stack_frame)),
-            &self.globals,
+            self.modules.values(),
         );
         let bytecode = ByteCodeFunction::with_str(self, s, &Bump::new())?;
         self.eval(bytecode)
@@ -177,6 +182,7 @@ impl Vm {
     /// This function retrieves the next instruction from the current bytecode function
     /// and executes it. It handles various instructions such as `Push`, `Eval`, `Get`, `Deref`, and `Return`.
     fn run_next(&mut self) -> VmResult<()> {
+        let global_id = self.get_or_create_symbol_id("%global");
         let bytecode_idx = self.stack_frame.bytecode_idx;
         self.stack_frame.bytecode_idx = bytecode_idx + 1;
         let instruction = self
@@ -194,7 +200,7 @@ impl Vm {
                 self.stack.push(v);
             }
             Instruction::Deref(symbol) => {
-                let v = match self.globals.values.get(symbol) {
+                let v = match self.modules.get_mut(&global_id).unwrap().values.get(symbol) {
                     Some(v) => *v,
                     None => return Err(VmError::SymbolNotFound(*symbol)),
                 };
@@ -296,9 +302,9 @@ impl Objects {
         &mut self,
         stack: &[Val],
         stack_frames: impl Iterator<Item = &'a StackFrame>,
-        globals: &Module,
+        modules: impl Iterator<Item = &'a Module>,
     ) {
-        self.mark(stack, stack_frames, globals);
+        self.mark(stack, stack_frames, modules);
         self.sweep();
     }
 
@@ -309,11 +315,13 @@ impl Objects {
         &mut self,
         stack: &[Val],
         stack_frames: impl Iterator<Item = &'a StackFrame>,
-        globals: &Module,
+        modules: impl Iterator<Item = &'a Module>,
     ) {
         let (mut queue, mut tmp_queue) = (Vec::new(), Vec::new());
         self.mark_many(stack.iter().copied(), &mut queue, &mut tmp_queue);
-        self.mark_many(globals.values.values().copied(), &mut queue, &mut tmp_queue);
+        for module in modules {
+            self.mark_many(module.values.values().copied(), &mut queue, &mut tmp_queue);
+        }
         for frame in stack_frames {
             for instruction in frame.function.instructions.iter() {
                 Self::mark_instruction(instruction, &mut queue);
