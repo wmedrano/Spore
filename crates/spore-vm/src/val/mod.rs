@@ -51,3 +51,19 @@ impl std::fmt::Debug for ValFormatter<'_> {
         }
     }
 }
+
+impl std::fmt::Display for ValFormatter<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.val {
+            Val::Void => write!(f, "<void>"),
+            Val::Int(x) => write!(f, "{x}"),
+            Val::Float(x) => write!(f, "{x}"),
+            Val::Symbol(symbol_id) => match self.vm.symbol_name(symbol_id) {
+                Some(x) => write!(f, "'{x}"),
+                None => write!(f, "'<symbol-{}>", symbol_id.as_num()),
+            },
+            Val::NativeFunction(object_id) => write!(f, "<nativefunction-{}>", object_id.as_num()),
+            Val::BytecodeFunction(object_id) => write!(f, "<function-{}>", object_id.as_num()),
+        }
+    }
+}

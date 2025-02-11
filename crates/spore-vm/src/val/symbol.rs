@@ -6,6 +6,13 @@ use compact_str::CompactString;
 /// An identifier for a symbol.
 pub struct SymbolId(u32);
 
+impl SymbolId {
+    /// Get the symbol id as a number.
+    pub fn as_num(self) -> u32 {
+        self.0
+    }
+}
+
 #[derive(Default)]
 /// A table mapping symbols to names.
 pub struct SymbolTable {

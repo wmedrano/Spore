@@ -3,6 +3,13 @@ use std::{collections::HashMap, hash::Hash, marker::PhantomData};
 /// An identifier for an object in the object store.
 pub struct ObjectId<T>(u32, PhantomData<T>);
 
+impl<T> ObjectId<T> {
+    /// Get the id as a number.
+    pub fn as_num(self) -> u32 {
+        self.0
+    }
+}
+
 impl<T> PartialEq for ObjectId<T> {
     fn eq(&self, other: &Self) -> bool {
         self.0 == other.0

@@ -134,6 +134,7 @@ pub enum VmError {
     NotCallable(Val),
     WrongType,
     WrongArity { expected: u32, actual: u32 },
+    Format(std::fmt::Error),
 }
 
 /// The result type for VM operations.
@@ -142,6 +143,12 @@ pub type VmResult<T> = Result<T, VmError>;
 impl From<CompileError> for VmError {
     fn from(value: CompileError) -> Self {
         VmError::Compile(value)
+    }
+}
+
+impl From<std::fmt::Error> for VmError {
+    fn from(value: std::fmt::Error) -> VmError {
+        VmError::Format(value)
     }
 }
 
