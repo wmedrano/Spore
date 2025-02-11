@@ -41,7 +41,7 @@ fn define_fn(vm: &mut Vm) -> VmResult<Val> {
     };
     vm.modules
         .get_mut(&global_id)
-        .expect("global module not found")
+        .expect("%global module not found")
         .values
         .insert(sym, val);
     Ok(Val::Void)

@@ -1,5 +1,3 @@
-Run unit tests with `cargo test` or run a single test with `cargo test <test-name>`.
-
-Unit tests should follow the form <scenario>_<expectation>.
-
-When finalizing files, makes sure that `cargo test` passes and use `cargo fmt` to format all files.
+- When finalizing files, run `cargo test` to ensure the project is in a good state.
+- Unit test function names should follow the form <scenario>_<expectation>.
+- Use `cargo test` to run unit tests and check the build.

@@ -87,9 +87,8 @@ impl Vm {
     /// from spore code. It checks for name conflicts and adds the function to the
     /// global module.
     pub fn register_native_function(&mut self, f: NativeFunction) -> &mut Self {
-        let globals_id = self.common_symbols.global;
         let symbol = self.objects.symbols.symbol_id(f.name());
-        let globals = self.modules.get_mut(&globals_id).unwrap();
+        let globals = self.modules.get_mut(&self.common_symbols.global).unwrap();
         assert!(
             !globals.values.contains_key(&symbol),
             "register_function called with existing function named {name}.",
@@ -184,7 +183,7 @@ impl Vm {
         while self.previous_stack_frames.len() != initial_stack_frames {
             self.run_next()?;
         }
-        let res = self.stack.last().cloned().unwrap_or(Val::Void);
+        let res = self.stack.last().cloned().expect("Value should exist");
         Ok(res)
     }
 
@@ -194,13 +193,19 @@ impl Vm {
     /// and executes it. It handles various instructions such as `Push`, `Eval`, `Get`, `Deref`, and `Return`.
     fn run_next(&mut self) -> VmResult<()> {
         let bytecode_idx = self.stack_frame.bytecode_idx;
+        if bytecode_idx >= self.stack_frame.function.instructions.len() {
+            return {
+                self.execute_return();
+                Ok(())
+            };
+        }
         self.stack_frame.bytecode_idx = bytecode_idx + 1;
         let instruction = self
             .stack_frame
             .function
             .instructions
             .get(bytecode_idx)
-            .unwrap_or(&Instruction::Return);
+            .expect("Instruction should exist");
         match instruction {
             Instruction::Push(v) => self.stack.push(*v),
             Instruction::Eval(n) => self.execute_eval(*n)?,
@@ -239,7 +244,7 @@ impl Vm {
         }
         self.stack_frame = self.previous_stack_frames.pop().unwrap_or_default();
         let return_value = if self.stack.len() >= stack_start {
-            *self.stack.last().unwrap()
+            *self.stack.last().expect("Value should exist")
         } else {
             todo!()
         };
@@ -277,7 +282,7 @@ impl Vm {
                     .clone();
                 let ret = function.call(self)?;
                 self.stack.truncate(stack_start);
-                *self.stack.last_mut().unwrap() = ret;
+                *self.stack.last_mut().expect("Value should exist") = ret;
                 self.stack_frame = self.previous_stack_frames.pop().unwrap();
             }
             Val::BytecodeFunction(bytecode_function) => {
