@@ -11,6 +11,8 @@ use crate::{object_store::ObjectId, vm::Vm};
 pub enum Val {
     /// Represents the lack of a value.
     Void,
+    /// Represents a boolean value.
+    Bool(bool),
     /// Represents an integer.
     Int(i64),
     /// Represents a floating-point number.
@@ -56,6 +58,7 @@ impl std::fmt::Display for ValFormatter<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.val {
             Val::Void => write!(f, "<void>"),
+            Val::Bool(x) => write!(f, "{x}"),
             Val::Int(x) => write!(f, "{x}"),
             Val::Float(x) => write!(f, "{x}"),
             Val::Symbol(symbol_id) => match self.vm.symbol_name(symbol_id) {

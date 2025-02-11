@@ -28,6 +28,8 @@ pub enum Ir<'a> {
 /// Represents a constant value.
 #[derive(Debug, PartialEq)]
 pub enum Constant<'a> {
+    /// A boolean constant.
+    Bool(bool),
     /// An integer constant.
     Int(i64),
     /// A floating-point constant.
@@ -44,6 +46,11 @@ pub enum ParsedText<'a> {
 impl<'a> ParsedText<'a> {
     /// Creates a new `ParsedText`.
     fn new(text: &'a str) -> Self {
+        if text == "true" {
+            return ParsedText::Constant(Constant::Bool(true));
+        } else if text == "false" {
+            return ParsedText::Constant(Constant::Bool(false));
+        }
         let leading_char = text.chars().next().unwrap_or(' ');
         if leading_char == '-' || leading_char.is_ascii_digit() {
             if let Ok(x) = text.parse() {

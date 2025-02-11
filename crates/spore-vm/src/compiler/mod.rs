@@ -68,6 +68,7 @@ impl Compiler<'_> {
         match ir {
             Ir::Constant(constant) => {
                 let c = match constant {
+                    Constant::Bool(x) => Val::Bool(*x),
                     Constant::Int(x) => Val::Int(*x),
                     Constant::Float(x) => Val::Float(*x),
                     Constant::Symbol(x) => Val::Symbol(self.vm.objects.symbols.symbol_id(x)),
