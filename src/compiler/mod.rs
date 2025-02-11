@@ -45,7 +45,7 @@ struct Compiler<'a> {
     pub args: &'a [&'a str],
 }
 
-impl<'a> Compiler<'a> {
+impl Compiler<'_> {
     /// Returns the index of a symbol in the argument list, if it exists.
     fn deref_idx(&self, symbol: &str) -> Option<usize> {
         for (i, arg) in self.args.iter().enumerate() {

@@ -36,7 +36,7 @@ pub struct ValFormatter<'a> {
     val: Val,
 }
 
-impl<'a> std::fmt::Debug for ValFormatter<'a> {
+impl std::fmt::Debug for ValFormatter<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.val {
             Val::Symbol(symbol_id) => match self.vm.symbol_name(symbol_id) {

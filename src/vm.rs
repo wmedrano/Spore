@@ -4,7 +4,8 @@ use bumpalo::Bump;
 
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub struct CommonSymbols {
-    global: SymbolId,
+    /// '%global
+    pub(crate) global: SymbolId,
 }
 
 use crate::{
@@ -25,7 +26,7 @@ use crate::{
 ///
 /// The Vm struct represents the virtual machine that executes bytecode.
 pub struct Vm {
-    common_symbols: CommonSymbols,
+    pub(crate) common_symbols: CommonSymbols,
     pub(crate) modules: HashMap<SymbolId, Module>,
     stack: Vec<Val>,
     stack_frame: StackFrame,
@@ -73,8 +74,7 @@ impl Default for Vm {
             previous_stack_frames: Vec::with_capacity(64),
             objects,
         };
-        vm.modules
-            .insert(vm.objects.symbols.symbol_id("%global"), Module::new());
+        vm.modules.insert(vm.common_symbols.global, Module::new());
         register_builtins(&mut vm);
         vm
     }
@@ -87,7 +87,7 @@ impl Vm {
     /// from spore code. It checks for name conflicts and adds the function to the
     /// global module.
     pub fn register_native_function(&mut self, f: NativeFunction) -> &mut Self {
-        let globals_id = self.objects.symbols.symbol_id("%global");
+        let globals_id = self.common_symbols.global;
         let symbol = self.objects.symbols.symbol_id(f.name());
         let globals = self.modules.get_mut(&globals_id).unwrap();
         assert!(
@@ -193,7 +193,6 @@ impl Vm {
     /// This function retrieves the next instruction from the current bytecode function
     /// and executes it. It handles various instructions such as `Push`, `Eval`, `Get`, `Deref`, and `Return`.
     fn run_next(&mut self) -> VmResult<()> {
-        let global_id = self.get_or_create_symbol_id("%global");
         let bytecode_idx = self.stack_frame.bytecode_idx;
         self.stack_frame.bytecode_idx = bytecode_idx + 1;
         let instruction = self
@@ -211,7 +210,13 @@ impl Vm {
                 self.stack.push(v);
             }
             Instruction::Deref(symbol) => {
-                let v = match self.modules.get_mut(&global_id).unwrap().values.get(symbol) {
+                let v = match self
+                    .modules
+                    .get_mut(&self.common_symbols.global)
+                    .unwrap()
+                    .values
+                    .get(symbol)
+                {
                     Some(v) => *v,
                     None => return Err(VmError::SymbolNotFound(*symbol)),
                 };

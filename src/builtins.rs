@@ -34,7 +34,7 @@ fn plus_fn(args: &[Val]) -> VmResult<Val> {
 
 /// Defines a symbol in the global scope.
 fn define_fn(vm: &mut Vm) -> VmResult<Val> {
-    let global_id = vm.get_or_create_symbol_id("%global");
+    let global_id = vm.common_symbols.global;
     let (sym, val) = match vm.args() {
         [Val::Symbol(sym), val] => (*sym, *val),
         _ => todo!(),
