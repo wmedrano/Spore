@@ -226,7 +226,7 @@ mod tests {
     fn build_function_call_produces_function_call() {
         let arena = Bump::new();
         let source = "(add 1 2)";
-        let ast = Ast::with_source(source)[0].clone();
+        let ast = Ast::with_source(source).unwrap()[0].clone();
         let ir = Ir::with_ast(source, &ast, &arena).unwrap();
 
         assert_eq!(
@@ -245,7 +245,7 @@ mod tests {
     fn number_produces_constant_int() {
         let arena = Bump::new();
         let source = "123";
-        let ast = Ast::with_source(source)[0].clone();
+        let ast = Ast::with_source(source).unwrap()[0].clone();
         let ir = Ir::with_ast(source, &ast, &arena).unwrap();
         assert_eq!(ir, Ir::Constant(Constant::Int(123)));
     }
@@ -254,7 +254,7 @@ mod tests {
     fn number_with_decimals_produces_constant_float() {
         let arena = Bump::new();
         let source = "123.45";
-        let ast = Ast::with_source(source)[0].clone();
+        let ast = Ast::with_source(source).unwrap()[0].clone();
         let ir = Ir::with_ast(source, &ast, &arena).unwrap();
         assert_eq!(ir, Ir::Constant(Constant::Float(123.45)));
     }
@@ -263,7 +263,7 @@ mod tests {
     fn symbol_produces_constant_symbol() {
         let arena = Bump::new();
         let source = "\'hello";
-        let ast = Ast::with_source(source)[0].clone();
+        let ast = Ast::with_source(source).unwrap()[0].clone();
         let ir = Ir::with_ast(source, &ast, &arena).unwrap();
         assert_eq!(ir, Ir::Constant(Constant::Symbol("hello")));
     }
@@ -272,7 +272,7 @@ mod tests {
     fn identifier_produces_deref() {
         let arena = Bump::new();
         let source = "hello";
-        let ast = Ast::with_source(source)[0].clone();
+        let ast = Ast::with_source(source).unwrap()[0].clone();
 
         let ir = Ir::with_ast(source, &ast, &arena).unwrap();
         assert_eq!(ir, Ir::Deref("hello"));
@@ -282,7 +282,7 @@ mod tests {
     fn define_produces_define_node() {
         let arena = Bump::new();
         let source = "(define x 1)";
-        let ast = Ast::with_source(source)[0].clone();
+        let ast = Ast::with_source(source).unwrap()[0].clone();
         let ir = Ir::with_ast(source, &ast, &arena).unwrap();
         assert_eq!(
             ir,
@@ -297,7 +297,7 @@ mod tests {
     fn define_function_produces_define_with_lambda() {
         let arena = Bump::new();
         let source = "(define (foo) 1)";
-        let ast = Ast::with_source(source)[0].clone();
+        let ast = Ast::with_source(source).unwrap()[0].clone();
         let ir = Ir::with_ast(source, &ast, &arena).unwrap();
         assert_eq!(
             ir,

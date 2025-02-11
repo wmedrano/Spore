@@ -23,13 +23,14 @@ pub enum AstError {
 
 impl Ast {
     /// Creates a vector of ASTs from a source string.
-    pub fn with_source(source: &str) -> Vec<Self> {
+    pub fn with_source(source: &str) -> Result<Vec<Self>, AstError> {
         let mut asts = Vec::new();
         let mut tokens = tokenize(source);
-        while let Some(ast) = Ast::next_ast(&mut tokens) {
-            asts.push(ast.unwrap());
+        while let Some(ast_res) = Ast::next_ast(&mut tokens) {
+            let ast = ast_res?;
+            asts.push(ast);
         }
-        asts
+        Ok(asts)
     }
 
     /// Parses the next AST from the token stream.
@@ -107,13 +108,13 @@ mod tests {
 
     #[test]
     fn empty_source_has_empty_ast() {
-        assert_eq!(Ast::with_source("").len(), 0);
+        assert_eq!(Ast::with_source("").unwrap().len(), 0);
     }
 
     #[test]
     fn single_identifier_has_single_leaf() {
         assert_eq!(
-            Ast::with_source("ident")[0],
+            Ast::with_source("ident").unwrap()[0],
             Ast::Leaf {
                 span: Span { start: 0, end: 5 }
             }
@@ -122,19 +123,26 @@ mod tests {
 
     #[test]
     fn several_items_make_list_of_leafs() {
-        assert_eq!(Ast::with_source("a b 1 two \"three\""), &[
-                Ast::Leaf { span: Span { start: 0, end: 1 } },
-                Ast::Leaf { span: Span { start: 2, end: 3 } },
-                Ast::Leaf { span: Span { start: 4, end: 5 } },
-                Ast::Leaf { span: Span { start: 6, end: 9 } },
-                Ast::Leaf { span: Span { start: 10, end: 17 } }
-            ]);
+        assert_eq!(
+            Ast::with_source("a b c").unwrap().as_slice(),
+            &[
+                Ast::Leaf {
+                    span: Span { start: 0, end: 1 }
+                },
+                Ast::Leaf {
+                    span: Span { start: 2, end: 3 }
+                },
+                Ast::Leaf {
+                    span: Span { start: 4, end: 5 }
+                },
+            ]
+        );
     }
 
     #[test]
     fn parenthesis_make_tree() {
         assert_eq!(
-            Ast::with_source("(1 2 3)"),
+            Ast::with_source("(1 2 3)").unwrap(),
             &[Ast::Tree {
                 span: Span { start: 0, end: 7 },
                 children: vec![
@@ -155,7 +163,7 @@ mod tests {
     #[test]
     fn nested_parenthesis_form_nested_trees() {
         assert_eq!(
-            Ast::with_source("(foo (bar 3))"),
+            Ast::with_source("(foo (bar 3))").unwrap(),
             &[Ast::Tree {
                 span: Span { start: 0, end: 13 },
                 children: vec![

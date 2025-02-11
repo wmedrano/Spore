@@ -1,4 +1,4 @@
-use ast::Ast;
+use ast::{Ast, AstError};
 use bumpalo::Bump;
 use ir::{Constant, Ir, IrError};
 
@@ -18,7 +18,14 @@ pub mod tokenizer;
 #[derive(Debug, PartialEq)]
 /// Represents an error that can occur during compilation.
 pub enum CompileError {
+    Ast(AstError),
     Ir(IrError),
+}
+
+impl From<AstError> for CompileError {
+    fn from(value: AstError) -> Self {
+        CompileError::Ast(value)
+    }
 }
 
 /// Compiles a string of source code into bytecode instructions.
@@ -29,7 +36,7 @@ pub fn compile<'a>(
 ) -> Result<SporeRc<[Instruction]>, CompileError> {
     let mut instructions = Vec::new();
     let mut compiler = Compiler { vm, args: &[] };
-    for ast in Ast::with_source(source) {
+    for ast in Ast::with_source(source)? {
         let ir = match ir::Ir::with_ast(source, &ast, arena) {
             Ok(ir) => ir,
             Err(err) => return Err(CompileError::Ir(err)),
