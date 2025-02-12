@@ -13,10 +13,10 @@ use crate::{
     compiler::CompileError,
     instruction::Instruction,
     module::Module,
-    object_store::{GcColor, TypedObjectStore},
+    object_store::Objects,
     val::{
         functions::{ByteCodeFunction, NativeFunction},
-        symbol::{SymbolId, SymbolTable},
+        symbol::SymbolId,
         Val,
     },
 };
@@ -36,28 +36,16 @@ pub struct Vm {
 }
 
 #[derive(Debug, Default)]
-/// Stores all the heap allocated objects.
-///
-/// The Objects struct manages the heap allocated objects, including native functions,
-/// bytecode functions, and symbols. It also handles garbage collection.
-pub struct Objects {
-    /// The color used to mark reachable objects during GC.
-    pub reachable_color: GcColor,
-    /// The store for native functions.
-    pub native_functions: TypedObjectStore<NativeFunction>,
-    /// The store for bytecode functions.
-    pub bytecode_functions: TypedObjectStore<ByteCodeFunction>,
-    /// The symbol table.
-    pub symbols: SymbolTable,
-    /// The null bytecode function.
-    pub null_bytecode: ByteCodeFunction,
-}
-
-#[derive(Debug, Default)]
 pub struct StackFrame {
     stack_start: usize,
     bytecode_idx: usize,
     function: ByteCodeFunction,
+}
+
+impl StackFrame {
+    pub fn iter_instructions(&self) -> impl Iterator<Item = &Instruction> {
+        self.function.instructions.iter()
+    }
 }
 
 impl Default for Vm {
@@ -319,105 +307,6 @@ impl Vm {
             v => return Err(VmError::NotCallable(v)),
         }
         Ok(())
-    }
-}
-
-impl Objects {
-    /// Runs garbage collection.
-    ///
-    /// This function initiates a garbage collection cycle, marking reachable objects and then sweeping unreachable objects.
-    pub fn run_gc<'a>(
-        &mut self,
-        stack: &[Val],
-        stack_frames: impl Iterator<Item = &'a StackFrame>,
-        modules: impl Iterator<Item = &'a Module>,
-    ) {
-        self.mark(stack, stack_frames, modules);
-        self.sweep();
-    }
-
-    /// Marks reachable objects during garbage collection.
-    ///
-    /// This function recursively marks all reachable objects, starting from the stack, stack frames, and globals.
-    fn mark<'a>(
-        &mut self,
-        stack: &[Val],
-        stack_frames: impl Iterator<Item = &'a StackFrame>,
-        modules: impl Iterator<Item = &'a Module>,
-    ) {
-        let (mut queue, mut tmp_queue) = (Vec::new(), Vec::new());
-        self.mark_many(stack.iter().copied(), &mut queue, &mut tmp_queue);
-        for module in modules {
-            self.mark_many(module.values.values().copied(), &mut queue, &mut tmp_queue);
-        }
-        for frame in stack_frames {
-            for instruction in frame.function.instructions.iter() {
-                Self::mark_instruction(instruction, &mut queue);
-            }
-        }
-        self.exhaust_queue(&mut queue, &mut tmp_queue);
-    }
-
-    fn exhaust_queue(&mut self, queue: &mut Vec<Val>, tmp_queue: &mut Vec<Val>) {
-        while !queue.is_empty() {
-            for v in queue.drain(..) {
-                self.mark_one(v, tmp_queue);
-            }
-            std::mem::swap(queue, tmp_queue);
-        }
-    }
-
-    fn mark_many(
-        &mut self,
-        vals: impl Iterator<Item = Val>,
-        queue: &mut Vec<Val>,
-        tmp_queue: &mut Vec<Val>,
-    ) {
-        for v in vals {
-            self.mark_one(v, queue);
-        }
-        self.exhaust_queue(queue, tmp_queue)
-    }
-
-    /// Marks a single value as reachable.
-    ///
-    /// This function marks a single `Val` as reachable by setting the appropriate color in the object store.
-    fn mark_one(&mut self, val: Val, queue: &mut Vec<Val>) {
-        match val {
-            Val::NativeFunction(id) => {
-                self.native_functions.maybe_color(id, self.reachable_color);
-            }
-            Val::BytecodeFunction(id) => {
-                if let Some(f) = self
-                    .bytecode_functions
-                    .maybe_color(id, self.reachable_color)
-                {
-                    for instruction in f.instructions.iter() {
-                        Self::mark_instruction(instruction, queue);
-                    }
-                }
-            }
-            Val::Void | Val::Bool(_) | Val::Int(_) | Val::Float(_) | Val::Symbol(_) => (),
-        }
-    }
-
-    fn mark_instruction(instruction: &Instruction, queue: &mut Vec<Val>) {
-        match instruction {
-            Instruction::Push(v) => queue.push(*v),
-            Instruction::Eval(_)
-            | Instruction::Get(_)
-            | Instruction::Deref(_)
-            | Instruction::Return => {}
-        }
-    }
-
-    /// Sweeps the object store to collect garbage.
-    ///
-    /// This function sweeps the object store, collecting any objects that are not marked with the current reachable color.
-    fn sweep(&mut self) {
-        self.reachable_color = self.reachable_color.swap();
-        self.native_functions.sweep_color(self.reachable_color);
-        self.bytecode_functions.sweep_color(self.reachable_color);
     }
 }
 
