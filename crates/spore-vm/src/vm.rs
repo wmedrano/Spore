@@ -237,10 +237,6 @@ impl Vm {
     /// stack frame, retrieving the return value, and updating the stack.
     fn execute_return(&mut self) {
         let stack_start = self.stack_frame.stack_start;
-        match self.previous_stack_frames.pop() {
-            Some(sf) => self.stack_frame = sf,
-            None => self.stack_frame.stack_start = 0,
-        }
         self.stack_frame = self.previous_stack_frames.pop().unwrap_or_default();
         let return_value = if self.stack.len() >= stack_start {
             *self.stack.last().expect("Value should exist")
@@ -298,25 +294,26 @@ impl Vm {
                         actual: arg_count,
                     });
                 }
-                let previous_stack_frame = std::mem::replace(
-                    &mut self.stack_frame,
-                    StackFrame {
-                        stack_start,
-                        bytecode_idx: 0,
-                        function,
-                    },
-                );
-                self.previous_stack_frames.push(previous_stack_frame);
+                self.previous_stack_frames
+                    .push(std::mem::take(&mut self.stack_frame));
+                self.stack_frame = StackFrame {
+                    stack_start,
+                    bytecode_idx: 0,
+                    function,
+                };
             }
             v => return Err(VmError::NotCallable(v)),
         }
         Ok(())
     }
 
+    /// Execute an instruction jump.
     fn execute_jump(&mut self, n: usize) {
         self.stack_frame.bytecode_idx += n;
     }
 
+    /// Execute an instruction jump if the top value in the stack is `true`. This will consume the
+    /// top value.
     fn execute_jump_if(&mut self, n: usize) -> VmResult<()> {
         let v = self.stack.pop().ok_or_else(|| {
             VmError::InterpreterBug("jump_if called with no value on stack".into())
@@ -427,5 +424,16 @@ mod tests {
     fn if_with_false_pred_and_no_false_branch_returns_true_void() {
         let mut vm = Vm::default();
         assert_eq!(vm.eval_str("(if (< 2 1) 3)").unwrap(), Val::Void);
+    }
+
+    #[test]
+    fn recursive_function_call() {
+        let mut vm = Vm::default();
+        assert_eq!(
+            vm.eval_str("(define (fib n) (if (< n 2) 1 (+ (fib (- n 2)) (fib (- n 1)))))")
+                .unwrap(),
+            Val::Void
+        );
+        assert_eq!(vm.eval_str("(fib 10)").unwrap(), Val::Int(89));
     }
 }

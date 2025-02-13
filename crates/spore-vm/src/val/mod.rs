@@ -31,11 +31,9 @@ impl Val {
         ValFormatter { vm, val: self }
     }
 
+    /// Returns true if `is_truthy` is not false or void.
     pub fn is_truthy(self) -> bool {
-        match self {
-            Val::Bool(false) | Val::Void => false,
-            _ => true,
-        }
+        !matches!(self, Val::Bool(false) | Val::Void)
     }
 }
 
@@ -64,31 +62,31 @@ impl std::fmt::Debug for ValFormatter<'_> {
 impl std::fmt::Display for ValFormatter<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.val {
-            Val::Void => write!(f, "<void>"),
+            Val::Void => write!(f, "void"),
             Val::Bool(x) => write!(f, "{x}"),
             Val::Int(x) => write!(f, "{x}"),
             Val::Float(x) => write!(f, "{x}"),
             Val::Symbol(symbol_id) => match self.vm.symbol_name(symbol_id) {
                 Some(x) => write!(f, "'{x}"),
-                None => write!(f, "'<symbol-{}>", symbol_id.as_num()),
+                None => write!(f, "'(symbol-{})", symbol_id.as_num()),
             },
             Val::NativeFunction(object_id) => {
                 match self.vm.objects.native_functions.get(object_id) {
-                    Some(func) => write!(f, "<native-fn-{}>", func.name()),
-                    None => write!(f, "<native-fn-{}>", object_id.as_num()),
+                    Some(func) => write!(f, "(native-fn-{})", func.name()),
+                    None => write!(f, "(native-fn-{})", object_id.as_num()),
                 }
             }
             Val::BytecodeFunction(object_id) => {
                 match self.vm.objects.bytecode_functions.get(object_id) {
                     Some(bc) => write!(
                         f,
-                        "<fn-{}>",
+                        "(fn-{})",
                         match &bc.name {
                             Some(s) => s.as_str(),
                             None => "lambda",
                         }
                     ),
-                    None => write!(f, "<fn-{}>", object_id.as_num()),
+                    None => write!(f, "(fn-{})", object_id.as_num()),
                 }
             }
         }

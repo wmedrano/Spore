@@ -112,6 +112,14 @@ mod tests {
     }
 
     #[test]
+    fn do_returns_last_value_or_void_if_empty() {
+        let mut vm = Vm::default();
+        assert_eq!(vm.eval_str("(do)"), Ok(Val::Void));
+        assert_eq!(vm.eval_str("(do 1)"), Ok(Val::Int(1)));
+        assert_eq!(vm.eval_str("(do 1 2)"), Ok(Val::Int(2)));
+    }
+
+    #[test]
     fn empty_plus_is_0() {
         let mut vm = Vm::default();
         assert_eq!(vm.eval_str("(+)").unwrap(), Val::Int(0));

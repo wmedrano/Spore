@@ -36,7 +36,7 @@ impl Instruction {
     }
 }
 
-impl<'a> std::fmt::Display for InstructionFormatter<'a> {
+impl std::fmt::Display for InstructionFormatter<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.instruction {
             Instruction::Return => write!(f, "Return"),

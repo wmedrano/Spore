@@ -147,8 +147,8 @@ impl<'a> IrBuilder<'a> {
                         let span = *span;
                         let text = span.text(self.source);
                         match text {
-                            "define" | "lambda" => return Err(IrError::BadDefine(span)),
-                            "if" => return Err(IrError::BadIf(span)),
+                            "define" | "lambda" => Err(IrError::BadDefine(span)),
+                            "if" => Err(IrError::BadIf(span)),
                             _ => self.build_function_call(span, children.as_slice()),
                         }
                     }
