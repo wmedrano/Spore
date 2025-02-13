@@ -176,6 +176,16 @@ mod tests {
     }
 
     #[test]
+    fn string_is_parsed_as_single_leaf() {
+        assert_eq!(
+            Ast::with_source("\"hello world\"").unwrap(),
+            &[Ast::Leaf {
+                span: Span { start: 0, end: 13 }
+            }]
+        );
+    }
+
+    #[test]
     fn nested_parenthesis_form_nested_trees() {
         assert_eq!(
             Ast::with_source("(foo (bar 3))").unwrap(),

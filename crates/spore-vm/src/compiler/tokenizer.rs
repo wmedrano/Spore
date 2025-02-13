@@ -53,9 +53,43 @@ pub fn tokenize(source: &str) -> impl '_ + Iterator<Item = Token> {
                     },
                 });
             }
+            '"' => return Some(parse_string(idx as u32, &mut source_iter)),
             _ => return Some(parse_token(idx as u32, &mut source_iter)),
         }
     })
+}
+
+/// Parses a string token from the source code.
+fn parse_string(start: u32, source_iter: &mut Peekable<CharIndices>) -> Token {
+    let mut end = start;
+    loop {
+        let (idx, ch) = match source_iter.next() {
+            None => {
+                let span = Span {
+                    start,
+                    end: end + 1,
+                };
+                return Token {
+                    span,
+                    token_type: TokenType::Identifier,
+                };
+            }
+            Some(x) => x,
+        };
+        if idx == 0 {
+            assert_eq!(ch, '"');
+        }
+        end = idx as u32;
+        if ch == '"' && idx != 0 {
+            return Token {
+                span: Span {
+                    start,
+                    end: end + 1,
+                },
+                token_type: TokenType::Identifier,
+            };
+        }
+    }
 }
 
 /// Parses a token from the source code.
@@ -118,6 +152,20 @@ mod tests {
  	 "
             ),
             Vec::<_>::new()
+        );
+    }
+
+    #[test]
+    fn quotes_surrounded_text_is_parsed_as_single_token() {
+        assert_eq!(
+            tokenize_to_vec("\"hello world\""),
+            vec![(
+                "\"hello world\"",
+                Token {
+                    span: Span { start: 0, end: 13 },
+                    token_type: TokenType::Identifier
+                }
+            )]
         );
     }
 

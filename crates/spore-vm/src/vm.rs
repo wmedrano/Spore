@@ -14,12 +14,13 @@ use crate::{
     compiler::CompileError,
     instruction::Instruction,
     module::Module,
-    object_store::Objects,
+    object_store::{ObjectId, Objects},
     val::{
         functions::{ByteCodeFunction, NativeFunction},
         symbol::SymbolId,
         Val,
     },
+    SporeRc,
 };
 
 #[derive(Debug)]
@@ -40,12 +41,18 @@ pub struct Vm {
 pub struct StackFrame {
     stack_start: usize,
     bytecode_idx: usize,
-    function: ByteCodeFunction,
+    function: ObjectId<ByteCodeFunction>,
+    instructions: SporeRc<[Instruction]>,
 }
 
 impl StackFrame {
-    pub fn iter_instructions(&self) -> impl Iterator<Item = &Instruction> {
-        self.function.instructions.iter()
+    /// Returns the backing function or `None` if the current function is a native function.
+    pub fn function_val(&self) -> Option<Val> {
+        if self.function.as_num() == 0 {
+            None
+        } else {
+            Some(Val::BytecodeFunction(self.function))
+        }
     }
 }
 
@@ -185,7 +192,7 @@ impl Vm {
         );
         self.stack.clear();
         let bytecode = ByteCodeFunction::with_str(self, s, &Bump::new())?;
-        self.eval(bytecode)
+        self.eval_bytecode(bytecode)
     }
 
     /// Evaluates a pre-compiled bytecode function.
@@ -193,19 +200,26 @@ impl Vm {
     /// This function executes a pre-compiled `ByteCodeFunction` within the VM. It sets up
     /// a new stack frame, executes the bytecode instructions, and returns the resulting
     /// `Val` or an error if execution fails.
-    pub fn eval(&mut self, bytecode: ByteCodeFunction) -> VmResult<Val> {
+    fn eval_bytecode(&mut self, bytecode: ByteCodeFunction) -> VmResult<Val> {
         assert_eq!(bytecode.args, 0);
         let initial_stack_frames = self.previous_stack_frames.len();
+        let instructions = bytecode.instructions.clone();
+        let function = self.objects.register_bytecode(bytecode);
         let previous_stack_frame = std::mem::replace(
             &mut self.stack_frame,
             StackFrame {
                 stack_start: self.stack.len(),
                 bytecode_idx: 0,
-                function: bytecode,
+                function,
+                instructions,
             },
         );
         self.previous_stack_frames.push(previous_stack_frame);
-        while self.previous_stack_frames.len() != initial_stack_frames {
+        self.run(initial_stack_frames)
+    }
+
+    fn run(&mut self, stop_stack_frame: usize) -> VmResult<Val> {
+        while self.previous_stack_frames.len() != stop_stack_frame {
             self.run_next()?;
         }
         let res = self.stack.last().cloned().expect("Value should exist");
@@ -221,7 +235,6 @@ impl Vm {
         self.stack_frame.bytecode_idx = bytecode_idx + 1;
         let instruction = self
             .stack_frame
-            .function
             .instructions
             .get(bytecode_idx)
             .unwrap_or(&Instruction::Return);
@@ -287,7 +300,8 @@ impl Vm {
                     StackFrame {
                         stack_start,
                         bytecode_idx: 0,
-                        function: self.objects.null_bytecode.clone(),
+                        function: ObjectId::default(),
+                        instructions: self.objects.null_bytecode.instructions.clone(),
                     },
                 );
                 self.previous_stack_frames.push(previous_stack_frame);
@@ -307,8 +321,7 @@ impl Vm {
                     .objects
                     .bytecode_functions
                     .get(bytecode_function)
-                    .unwrap()
-                    .clone();
+                    .unwrap();
                 let arg_count = n as u32 - 1;
                 if function.args != arg_count {
                     return Err(VmError::WrongArity {
@@ -316,13 +329,16 @@ impl Vm {
                         actual: arg_count,
                     });
                 }
-                self.previous_stack_frames
-                    .push(std::mem::take(&mut self.stack_frame));
-                self.stack_frame = StackFrame {
-                    stack_start,
-                    bytecode_idx: 0,
-                    function,
-                };
+                let previous_frame = std::mem::replace(
+                    &mut self.stack_frame,
+                    StackFrame {
+                        stack_start,
+                        bytecode_idx: 0,
+                        function: bytecode_function,
+                        instructions: function.instructions.clone(),
+                    },
+                );
+                self.previous_stack_frames.push(previous_frame);
             }
             v => return Err(VmError::NotCallable(v)),
         }

@@ -1,5 +1,7 @@
 use std::rc::Rc;
 
+use compact_str::CompactString;
+
 /// Builtin functions.
 pub mod builtins;
 /// Compiler.
@@ -17,3 +19,6 @@ pub mod vm;
 
 /// A reference counted pointer.
 pub type SporeRc<T> = Rc<T>;
+
+/// The physical string representation.
+pub type SporeString = CompactString;

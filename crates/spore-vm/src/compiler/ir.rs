@@ -45,6 +45,8 @@ pub enum Constant<'a> {
     Float(f64),
     /// A symbol constant.
     Symbol(&'a str),
+    /// A string constant.
+    String(&'a str),
 }
 
 pub enum ParsedText<'a> {
@@ -68,6 +70,9 @@ impl<'a> ParsedText<'a> {
             if let Ok(x) = text.parse() {
                 return ParsedText::Constant(Constant::Float(x));
             }
+        }
+        if text.starts_with('"') && text.ends_with('"') {
+            return ParsedText::Constant(Constant::String(&text[1..text.len() - 1]));
         }
         if let Some(stripped) = text.strip_prefix('\'') {
             return ParsedText::Constant(Constant::Symbol(stripped));
@@ -342,6 +347,15 @@ mod tests {
         let ast = Ast::with_source(source).unwrap()[0].clone();
         let ir = Ir::with_ast(source, &ast, &arena).unwrap();
         assert_eq!(ir, Ir::Constant(Constant::Symbol("hello")));
+    }
+
+    #[test]
+    fn double_quotes_produces_constant_string() {
+        let arena = Bump::new();
+        let source = "\"hello world\"";
+        let ast = Ast::with_source(source).unwrap()[0].clone();
+        let ir = Ir::with_ast(source, &ast, &arena).unwrap();
+        assert_eq!(ir, Ir::Constant(Constant::String("hello world")));
     }
 
     #[test]

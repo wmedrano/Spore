@@ -4,7 +4,7 @@ pub mod symbol;
 use functions::{ByteCodeFunction, NativeFunction};
 use symbol::SymbolId;
 
-use crate::{object_store::ObjectId, vm::Vm};
+use crate::{object_store::ObjectId, vm::Vm, SporeString};
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 /// Represents a value in the VM.
@@ -19,9 +19,11 @@ pub enum Val {
     Float(f64),
     /// Represents a symbol.
     Symbol(SymbolId),
-    /// Represents a native function.
+    /// Contains a string.
+    String(ObjectId<SporeString>),
+    /// Contains a native function.
     NativeFunction(ObjectId<NativeFunction>),
-    /// Represents a bytecode function.
+    /// Contains a bytecode function.
     BytecodeFunction(ObjectId<ByteCodeFunction>),
 }
 
@@ -69,6 +71,10 @@ impl std::fmt::Display for ValFormatter<'_> {
             Val::Symbol(symbol_id) => match self.vm.symbol_name(symbol_id) {
                 Some(x) => write!(f, "'{x}"),
                 None => write!(f, "'(symbol-{})", symbol_id.as_num()),
+            },
+            Val::String(string_id) => match self.vm.objects.strings.get(string_id) {
+                Some(x) => write!(f, "{x}"),
+                None => write!(f, "(gc-string-{})", string_id.as_num()),
             },
             Val::NativeFunction(object_id) => {
                 match self.vm.objects.native_functions.get(object_id) {

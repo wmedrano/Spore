@@ -85,6 +85,8 @@ impl Compiler<'_> {
                     Constant::Int(x) => Val::Int(*x),
                     Constant::Float(x) => Val::Float(*x),
                     Constant::Symbol(x) => Val::Symbol(self.vm.objects.symbols.symbol_id(x)),
+                    // TODO: x should be parsed for escape sequences.
+                    Constant::String(x) => Val::String(self.vm.objects.register_string(*x)),
                 };
                 dst.push(Instruction::Push(c));
             }
@@ -126,11 +128,7 @@ impl Compiler<'_> {
                     instructions: lambda_instructions.into(),
                     args: args.len() as u32,
                 };
-                let lambda_id = self
-                    .vm
-                    .objects
-                    .bytecode_functions
-                    .register(lambda, self.vm.objects.reachable_color.swap());
+                let lambda_id = self.vm.objects.register_bytecode(lambda);
                 dst.push(Instruction::Push(Val::BytecodeFunction(lambda_id)));
             }
             Ir::If {

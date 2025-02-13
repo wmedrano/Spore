@@ -9,10 +9,17 @@ use crate::{
         Val,
     },
     vm::StackFrame,
+    SporeString,
 };
 
 /// An identifier for an object in the object store.
 pub struct ObjectId<T>(u32, PhantomData<T>);
+
+impl<T> Default for ObjectId<T> {
+    fn default() -> ObjectId<T> {
+        ObjectId(0, PhantomData)
+    }
+}
 
 impl<T> ObjectId<T> {
     /// Get the id as a number.
@@ -140,6 +147,8 @@ impl GcColor {
 pub struct Objects {
     /// The color used to mark reachable objects during GC.
     pub reachable_color: GcColor,
+    /// The store for strings.
+    pub strings: TypedObjectStore<SporeString>,
     /// The store for native functions.
     pub native_functions: TypedObjectStore<NativeFunction>,
     /// The store for bytecode functions.
@@ -151,6 +160,15 @@ pub struct Objects {
 }
 
 impl Objects {
+    pub fn register_bytecode(&mut self, bc: ByteCodeFunction) -> ObjectId<ByteCodeFunction> {
+        self.bytecode_functions
+            .register(bc, self.reachable_color.swap())
+    }
+
+    pub fn register_string(&mut self, s: impl Into<SporeString>) -> ObjectId<SporeString> {
+        self.strings.register(s.into(), self.reachable_color.swap())
+    }
+
     /// Runs garbage collection.
     ///
     /// This function initiates a garbage collection cycle, marking reachable objects and then sweeping unreachable objects.
@@ -179,14 +197,16 @@ impl Objects {
             self.mark_many(module.values.values().copied(), &mut queue, &mut tmp_queue);
         }
         for frame in stack_frames {
-            for instruction in frame.iter_instructions() {
-                Self::mark_instruction(instruction, &mut queue);
-            }
+            self.mark_many(frame.function_val().into_iter(), &mut queue, &mut tmp_queue);
         }
         self.exhaust_queue(&mut queue, &mut tmp_queue);
     }
 
+    /// Clears every item in `queue`.
+    ///
+    /// `tmp_queue` must be empty.
     fn exhaust_queue(&mut self, queue: &mut Vec<Val>, tmp_queue: &mut Vec<Val>) {
+        assert!(tmp_queue.is_empty());
         while !queue.is_empty() {
             for v in queue.drain(..) {
                 self.mark_one(v, tmp_queue);
@@ -212,6 +232,9 @@ impl Objects {
     /// This function marks a single `Val` as reachable by setting the appropriate color in the object store.
     fn mark_one(&mut self, val: Val, queue: &mut Vec<Val>) {
         match val {
+            Val::String(id) => {
+                self.strings.maybe_color(id, self.reachable_color);
+            }
             Val::NativeFunction(id) => {
                 self.native_functions.maybe_color(id, self.reachable_color);
             }
