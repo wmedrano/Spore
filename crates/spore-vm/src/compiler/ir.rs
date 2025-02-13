@@ -24,11 +24,19 @@ pub enum Ir<'a> {
         args: &'a [&'a str],
         exprs: &'a [Self],
     },
+    /// An if expression.
+    If {
+        pred: &'a Ir<'a>,
+        true_branch: &'a Ir<'a>,
+        false_branch: &'a Ir<'a>,
+    },
 }
 
 /// Represents a constant value.
 #[derive(Debug, PartialEq)]
 pub enum Constant<'a> {
+    /// A void constant.
+    Void,
     /// A boolean constant.
     Bool(bool),
     /// An integer constant.
@@ -75,6 +83,7 @@ pub enum IrError {
     ConstantNotCallable(Span),
     BadDefine(Span),
     BadLambda(Span),
+    BadIf(Span),
     DefineExpectedIdentifierButFoundConstant(Span),
     DefineExpectedSymbol(Span),
 }
@@ -127,13 +136,21 @@ impl<'a> IrBuilder<'a> {
                         },
                         _ => Err(IrError::BadLambda(*span)),
                     },
+                    Some((_, ParsedText::Identifier("if"))) => match children.as_slice() {
+                        [_if, pred, true_branch, false_branch] => {
+                            self.build_if(pred, true_branch, Some(false_branch))
+                        }
+                        [_if, pred, true_branch] => self.build_if(pred, true_branch, None),
+                        _ => Err(IrError::BadLambda(*span)),
+                    },
                     _ => {
                         let span = *span;
                         let text = span.text(self.source);
-                        if text == "define" || text == "lambda" {
-                            return Err(IrError::BadDefine(span));
+                        match text {
+                            "define" | "lambda" => return Err(IrError::BadDefine(span)),
+                            "if" => return Err(IrError::BadIf(span)),
+                            _ => self.build_function_call(span, children.as_slice()),
                         }
-                        self.build_function_call(span, children.as_slice())
                     }
                 }
             }
@@ -232,6 +249,26 @@ impl<'a> IrBuilder<'a> {
         Ok(Ir::Define {
             symbol: symbol_text,
             expr: self.arena.alloc(lambda),
+        })
+    }
+
+    /// Builds an if Ir.
+    fn build_if(
+        &self,
+        pred: &Ast,
+        true_branch: &Ast,
+        false_branch: Option<&Ast>,
+    ) -> Result<Ir<'a>, IrError> {
+        let pred = self.arena.alloc(self.build(pred)?);
+        let true_branch = self.arena.alloc(self.build(true_branch)?);
+        let false_branch = match false_branch {
+            Some(false_branch) => self.arena.alloc(self.build(false_branch)?),
+            None => &Ir::Constant(Constant::Void),
+        };
+        Ok(Ir::If {
+            pred,
+            true_branch,
+            false_branch,
         })
     }
 }

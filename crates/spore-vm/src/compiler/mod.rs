@@ -69,6 +69,7 @@ impl Compiler<'_> {
         match ir {
             Ir::Constant(constant) => {
                 let c = match constant {
+                    Constant::Void => Val::Void,
                     Constant::Bool(x) => Val::Bool(*x),
                     Constant::Int(x) => Val::Int(*x),
                     Constant::Float(x) => Val::Float(*x),
@@ -120,6 +121,28 @@ impl Compiler<'_> {
                     .bytecode_functions
                     .register(lambda, self.vm.objects.reachable_color.swap());
                 dst.push(Instruction::Push(Val::BytecodeFunction(lambda_id)));
+            }
+            Ir::If {
+                pred,
+                true_branch,
+                false_branch,
+            } => {
+                self.compile(dst, pred);
+                let condition_jump = dst.len();
+                dst.push(Instruction::JumpIf(0));
+
+                let false_start = dst.len();
+                self.compile(dst, false_branch);
+                let jump = dst.len();
+                dst.push(Instruction::Jump(0));
+                let false_end = dst.len();
+
+                let true_start = dst.len();
+                self.compile(dst, true_branch);
+                let true_end = dst.len();
+
+                dst[condition_jump] = Instruction::JumpIf(false_end - false_start);
+                dst[jump] = Instruction::Jump(true_end - true_start);
             }
         }
     }

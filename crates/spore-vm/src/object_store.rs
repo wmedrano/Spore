@@ -232,12 +232,12 @@ impl Objects {
     fn mark_instruction(instruction: &Instruction, queue: &mut Vec<Val>) {
         match instruction {
             Instruction::Push(v) => queue.push(*v),
-            Instruction::Eval(_)
+            Instruction::Return
+            | Instruction::Eval(_)
             | Instruction::Get(_)
             | Instruction::Deref(_)
             | Instruction::Jump(_)
-            | Instruction::JumpIf(_)
-            | Instruction::Return => {}
+            | Instruction::JumpIf(_) => {}
         }
     }
 

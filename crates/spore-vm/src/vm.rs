@@ -373,6 +373,13 @@ mod tests {
     }
 
     #[test]
+    fn function_with_multiple_values_returns_last_value() {
+        let mut vm = Vm::default();
+        assert_eq!(vm.eval_str("(define (foo) 1 2 3 4)").unwrap(), Val::Void,);
+        assert_eq!(vm.eval_str("(foo)").unwrap(), Val::Int(4));
+    }
+
+    #[test]
     fn define_with_args_creates_callable_function() {
         let mut vm = Vm::default();
         assert_eq!(
@@ -396,5 +403,29 @@ mod tests {
                 actual: 1
             }
         );
+    }
+
+    #[test]
+    fn if_with_true_pred_returns_true_branch() {
+        let mut vm = Vm::default();
+        assert_eq!(vm.eval_str("(if (< 1 2) 3 4)").unwrap(), Val::Int(3));
+    }
+
+    #[test]
+    fn if_with_false_pred_returns_false_branch() {
+        let mut vm = Vm::default();
+        assert_eq!(vm.eval_str("(if (< 2 1) 3 4)").unwrap(), Val::Int(4));
+    }
+
+    #[test]
+    fn if_with_true_pred_and_no_false_branch_returns_true_branch() {
+        let mut vm = Vm::default();
+        assert_eq!(vm.eval_str("(if (< 1 2) 3)").unwrap(), Val::Int(3));
+    }
+
+    #[test]
+    fn if_with_false_pred_and_no_false_branch_returns_true_void() {
+        let mut vm = Vm::default();
+        assert_eq!(vm.eval_str("(if (< 2 1) 3)").unwrap(), Val::Void);
     }
 }
