@@ -29,6 +29,17 @@ impl From<AstError> for CompileError {
     }
 }
 
+impl std::error::Error for CompileError {}
+
+impl std::fmt::Display for CompileError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CompileError::Ast(e) => write!(f, "{e}"),
+            CompileError::Ir(e) => write!(f, "{e}"),
+        }
+    }
+}
+
 /// Compiles a string of source code into bytecode instructions.
 pub fn compile<'a>(
     vm: &mut Vm,

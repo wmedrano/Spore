@@ -21,6 +21,21 @@ pub enum AstError {
     UnexpectedCloseParen(Span),
 }
 
+impl std::error::Error for AstError {}
+
+impl std::fmt::Display for AstError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AstError::UnclosedParen(span) => {
+                write!(f, "unclosed parenthesis encountered at {span}")
+            }
+            AstError::UnexpectedCloseParen(span) => {
+                write!(f, "found unexpected close parenthesis at {span}")
+            }
+        }
+    }
+}
+
 impl Ast {
     /// Creates a vector of ASTs from a source string.
     pub fn with_source(source: &str) -> Result<Vec<Self>, AstError> {

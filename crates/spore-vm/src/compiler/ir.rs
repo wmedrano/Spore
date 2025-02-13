@@ -88,6 +88,24 @@ pub enum IrError {
     DefineExpectedSymbol(Span),
 }
 
+impl std::error::Error for IrError {}
+
+impl std::fmt::Display for IrError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            IrError::EmptyFunctionCall(span) => write!(f, "empty function call at {span}"),
+            IrError::ConstantNotCallable(span) => write!(f, "constant not callable at {span}"),
+            IrError::BadDefine(span) => write!(f, "bad define at {span}"),
+            IrError::BadLambda(span) => write!(f, "bad lambda at {span}"),
+            IrError::BadIf(span) => write!(f, "bad if at {span}"),
+            IrError::DefineExpectedIdentifierButFoundConstant(span) => {
+                write!(f, "define expected identifier but found constant at {span}")
+            }
+            IrError::DefineExpectedSymbol(span) => write!(f, "define expected symbol at {span}"),
+        }
+    }
+}
+
 impl<'a> Ir<'a> {
     /// Creates an IR from an AST.
     pub fn with_ast(source: &'a str, ast: &Ast, arena: &'a Bump) -> Result<Ir<'a>, IrError> {

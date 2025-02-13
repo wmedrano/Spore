@@ -1,4 +1,8 @@
-use spore_vm::vm::{Vm, VmResult};
+use rustyline::error::ReadlineError;
+use spore_vm::{
+    compiler::ast::{Ast, AstError},
+    vm::{Vm, VmError, VmResult},
+};
 
 /// REPL for Spore VM.
 pub struct Repl {
@@ -6,6 +10,12 @@ pub struct Repl {
     vm: Vm,
     /// The number of expressions that have been evaluated.
     expressions_count: usize,
+}
+
+impl Default for Repl {
+    fn default() -> Repl {
+        Repl::new(Vm::default())
+    }
 }
 
 impl Repl {
@@ -20,6 +30,42 @@ impl Repl {
     /// Get the underlying Vm.
     pub fn vm(&self) -> &Vm {
         &self.vm
+    }
+
+    pub fn run(&mut self) -> VmResult<()> {
+        let mut rl = rustyline::DefaultEditor::new().unwrap();
+        let mut input_buffer = String::new();
+        loop {
+            let readline = rl.readline(">> ");
+            match readline {
+                Ok(input) => {
+                    input_buffer.push_str(&input);
+                    match Ast::with_source(&input_buffer) {
+                        Err(AstError::UnclosedParen(_)) => {}
+                        _ => match self.execute_to_string(&input_buffer) {
+                            Ok(out) => println!("{out}"),
+                            Err(err) => match err {
+                                VmError::InterpreterBug(_) => return Err(err),
+                                err => println!("Error: {err}"),
+                            },
+                        },
+                    };
+                }
+                Err(ReadlineError::Interrupted) => {
+                    println!("CTRL-C");
+                    break;
+                }
+                Err(ReadlineError::Eof) => {
+                    println!("CTRL-D");
+                    break;
+                }
+                Err(err) => {
+                    println!("Error: {:?}", err);
+                    break;
+                }
+            }
+        }
+        Ok(())
     }
 
     /// Executes a line of code in the REPL.

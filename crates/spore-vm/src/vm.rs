@@ -132,6 +132,28 @@ pub enum VmError {
     InterpreterBug(CompactString),
 }
 
+impl std::error::Error for VmError {}
+
+impl std::fmt::Display for VmError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            VmError::Compile(compile_error) => write!(f, "{compile_error}"),
+            VmError::SymbolNotFound(symbol_id) => {
+                write!(f, "symbol {} not found", symbol_id.as_num())
+            }
+            VmError::NotCallable(val) => write!(f, "val {val:?} is not callable"),
+            VmError::WrongType => write!(f, "wrong type encountered"),
+            VmError::WrongArity { expected, actual } => write!(
+                f,
+                "wrong arity, expected {expected} args, but got {actual} args."
+            ),
+            VmError::Custom(e) => write!(f, "custom error encountered, {e}"),
+            VmError::Format(error) => write!(f, "{error}"),
+            VmError::InterpreterBug(b) => write!(f, "{b}"),
+        }
+    }
+}
+
 /// The result type for VM operations.
 pub type VmResult<T> = Result<T, VmError>;
 

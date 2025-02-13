@@ -14,6 +14,12 @@ impl Span {
     }
 }
 
+impl std::fmt::Display for Span {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{start}..{end}", start = self.start, end = self.end)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
