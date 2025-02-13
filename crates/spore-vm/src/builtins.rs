@@ -12,6 +12,7 @@ pub fn register_builtins(vm: &mut Vm) -> &mut Vm {
         .register_native_function(NativeFunction::with_args("do", do_fn))
         .register_native_function(NativeFunction::with_args("throw", throw_fn))
         .register_native_function(NativeFunction::with_args("+", plus_fn))
+        .register_native_function(NativeFunction::with_args("-", minus_fn))
         .register_native_function(NativeFunction::with_args("<", less_fn))
 }
 
@@ -57,6 +58,21 @@ fn plus_fn(args: &[Val]) -> VmResult<Val> {
         Val::Float(float_sum + int_sum as f64)
     };
     Ok(res)
+}
+
+fn minus_fn(args: &[Val]) -> VmResult<Val> {
+    match args {
+        [] => Err(VmError::WrongArity {
+            expected: 1,
+            actual: 0,
+        }),
+        [Val::Int(x)] => Ok(Val::Int(-*x)),
+        [Val::Float(x)] => Ok(Val::Float(-*x)),
+        [leading, rest @ ..] => {
+            let sub = minus_fn(&[plus_fn(rest)?])?;
+            Ok(plus_fn(&[*leading, sub])?)
+        }
+    }
 }
 
 /// Returns `true` if the arguments are ordered from least to greatest.
@@ -145,5 +161,47 @@ mod tests {
     fn less_with_non_number_returns_error() {
         let mut vm = Vm::default();
         assert_eq!(vm.eval_str("(< false true)"), Err(VmError::WrongType));
+    }
+
+    #[test]
+    fn minus_with_no_args_returns_error() {
+        let mut vm = Vm::default();
+        assert_eq!(
+            vm.eval_str("(-)"),
+            Err(VmError::WrongArity {
+                expected: 1,
+                actual: 0
+            })
+        );
+    }
+
+    #[test]
+    fn minus_with_int_negates() {
+        let mut vm = Vm::default();
+        assert_eq!(vm.eval_str("(- 1)").unwrap(), Val::Int(-1));
+    }
+
+    #[test]
+    fn minus_with_float_negates() {
+        let mut vm = Vm::default();
+        assert_eq!(vm.eval_str("(- 1.0)").unwrap(), Val::Float(-1.0));
+    }
+
+    #[test]
+    fn minus_with_multiple_args_subtracts() {
+        let mut vm = Vm::default();
+        assert_eq!(vm.eval_str("(- 1 2 3)").unwrap(), Val::Int(-4));
+    }
+
+    #[test]
+    fn minus_with_multiple_floats_subtracts() {
+        let mut vm = Vm::default();
+        assert_eq!(vm.eval_str("(- 1.0 2.0 3.0)").unwrap(), Val::Float(-4.0));
+    }
+
+    #[test]
+    fn minus_with_mixed_ints_and_floats_returns_float() {
+        let mut vm = Vm::default();
+        assert_eq!(vm.eval_str("(- 1 2.0 3)").unwrap(), Val::Float(-4.0));
     }
 }
