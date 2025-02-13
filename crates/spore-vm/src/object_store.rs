@@ -51,8 +51,10 @@ pub struct TypedObjectStore<T> {
 
 impl<T> std::fmt::Debug for ObjectId<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let full_type_name = std::any::type_name::<T>();
+        let type_name = full_type_name.split("::").last().unwrap_or("UNKNOWN");
         f.debug_tuple("ObjectId")
-            .field(&std::any::type_name::<T>())
+            .field(&type_name)
             .field(&self.0)
             .finish()
     }
@@ -233,6 +235,8 @@ impl Objects {
             Instruction::Eval(_)
             | Instruction::Get(_)
             | Instruction::Deref(_)
+            | Instruction::Jump(_)
+            | Instruction::JumpIf(_)
             | Instruction::Return => {}
         }
     }

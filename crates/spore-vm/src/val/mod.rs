@@ -27,8 +27,15 @@ pub enum Val {
 
 impl Val {
     /// Creates a formatter for the value.
-    pub fn formatter(self, vm: &Vm) -> ValFormatter {
+    pub fn formatted(self, vm: &Vm) -> ValFormatter {
         ValFormatter { vm, val: self }
+    }
+
+    pub fn is_truthy(self) -> bool {
+        match self {
+            Val::Bool(false) | Val::Void => false,
+            _ => true,
+        }
     }
 }
 
@@ -65,8 +72,25 @@ impl std::fmt::Display for ValFormatter<'_> {
                 Some(x) => write!(f, "'{x}"),
                 None => write!(f, "'<symbol-{}>", symbol_id.as_num()),
             },
-            Val::NativeFunction(object_id) => write!(f, "<nativefunction-{}>", object_id.as_num()),
-            Val::BytecodeFunction(object_id) => write!(f, "<function-{}>", object_id.as_num()),
+            Val::NativeFunction(object_id) => {
+                match self.vm.objects.native_functions.get(object_id) {
+                    Some(func) => write!(f, "<native-fn-{}>", func.name()),
+                    None => write!(f, "<native-fn-{}>", object_id.as_num()),
+                }
+            }
+            Val::BytecodeFunction(object_id) => {
+                match self.vm.objects.bytecode_functions.get(object_id) {
+                    Some(bc) => write!(
+                        f,
+                        "<fn-{}>",
+                        match &bc.name {
+                            Some(s) => s.as_str(),
+                            None => "lambda",
+                        }
+                    ),
+                    None => write!(f, "<fn-{}>", object_id.as_num()),
+                }
+            }
         }
     }
 }

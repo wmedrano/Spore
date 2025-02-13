@@ -1,5 +1,6 @@
 use ast::{Ast, AstError};
 use bumpalo::Bump;
+use compact_str::CompactString;
 use ir::{Constant, Ir, IrError};
 
 use crate::builtins;
@@ -102,13 +103,14 @@ impl Compiler<'_> {
                 self.compile(dst, expr);
                 dst.push(Instruction::Eval(3));
             }
-            Ir::Lambda { args, exprs } => {
+            Ir::Lambda { name, args, exprs } => {
                 let mut compiler = Compiler { vm: self.vm, args };
                 let mut lambda_instructions = Vec::new();
                 for expr in exprs.iter() {
                     compiler.compile(&mut lambda_instructions, expr);
                 }
                 let lambda = ByteCodeFunction {
+                    name: name.map(CompactString::new),
                     instructions: lambda_instructions.into(),
                     args: args.len() as u32,
                 };

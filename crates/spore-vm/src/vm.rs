@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use bumpalo::Bump;
+use compact_str::CompactString;
 
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub struct CommonSymbols {
@@ -121,8 +122,14 @@ pub enum VmError {
     SymbolNotFound(SymbolId),
     NotCallable(Val),
     WrongType,
-    WrongArity { expected: u32, actual: u32 },
+    WrongArity {
+        expected: u32,
+        actual: u32,
+    },
+    Custom(CompactString),
     Format(std::fmt::Error),
+    /// Something unexpected happened with the interpreter. This is an issue with Spore itself and not the executed code.
+    InterpreterBug(CompactString),
 }
 
 /// The result type for VM operations.
@@ -154,6 +161,7 @@ impl Vm {
                 .chain(std::iter::once(&self.stack_frame)),
             self.modules.values(),
         );
+        self.stack.clear();
         let bytecode = ByteCodeFunction::with_str(self, s, &Bump::new())?;
         self.eval(bytecode)
     }
@@ -188,19 +196,13 @@ impl Vm {
     /// and executes it. It handles various instructions such as `Push`, `Eval`, `Get`, `Deref`, and `Return`.
     fn run_next(&mut self) -> VmResult<()> {
         let bytecode_idx = self.stack_frame.bytecode_idx;
-        if bytecode_idx >= self.stack_frame.function.instructions.len() {
-            return {
-                self.execute_return();
-                Ok(())
-            };
-        }
         self.stack_frame.bytecode_idx = bytecode_idx + 1;
         let instruction = self
             .stack_frame
             .function
             .instructions
             .get(bytecode_idx)
-            .expect("Instruction should exist");
+            .unwrap_or(&Instruction::Return);
         match instruction {
             Instruction::Push(v) => self.stack.push(*v),
             Instruction::Eval(n) => self.execute_eval(*n)?,
@@ -222,6 +224,8 @@ impl Vm {
                 };
                 self.stack.push(v);
             }
+            Instruction::Jump(n) => self.execute_jump(*n),
+            Instruction::JumpIf(n) => self.execute_jump_if(*n)?,
             Instruction::Return => self.execute_return(),
         }
         Ok(())
@@ -305,6 +309,20 @@ impl Vm {
                 self.previous_stack_frames.push(previous_stack_frame);
             }
             v => return Err(VmError::NotCallable(v)),
+        }
+        Ok(())
+    }
+
+    fn execute_jump(&mut self, n: usize) {
+        self.stack_frame.bytecode_idx += n;
+    }
+
+    fn execute_jump_if(&mut self, n: usize) -> VmResult<()> {
+        let v = self.stack.pop().ok_or_else(|| {
+            VmError::InterpreterBug("jump_if called with no value on stack".into())
+        })?;
+        if v.is_truthy() {
+            self.execute_jump(n);
         }
         Ok(())
     }

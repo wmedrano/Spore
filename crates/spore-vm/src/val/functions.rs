@@ -4,7 +4,7 @@ use compact_str::CompactString;
 use crate::{
     compiler::CompileError,
     instruction::Instruction,
-    vm::{Vm, VmResult},
+    vm::{Vm, VmError, VmResult},
     SporeRc,
 };
 
@@ -37,6 +37,21 @@ impl NativeFunction {
         NativeFunction::new(name, new_f)
     }
 
+    /// Creates a new native function that takes a single argument.
+    pub fn with_arg_1<F: 'static + Fn(Val) -> VmResult<Val>>(name: &str, f: F) -> NativeFunction {
+        let new_f = move |vm: &mut Vm| {
+            let args = vm.args();
+            match args {
+                [arg] => f(*arg),
+                _ => Err(VmError::WrongArity {
+                    expected: 1,
+                    actual: args.len() as u32,
+                }),
+            }
+        };
+        NativeFunction::new(name, new_f)
+    }
+
     /// Returns the name of the function.
     pub fn name(&self) -> &str {
         self.name.as_str()
@@ -63,6 +78,8 @@ impl PartialEq for NativeFunction {
 #[derive(Clone, Debug, Default, PartialEq)]
 /// Represents a bytecode function.
 pub struct ByteCodeFunction {
+    /// The name of the function.
+    pub name: Option<CompactString>,
     /// The instructions of the function.
     pub instructions: SporeRc<[Instruction]>,
     /// The number of arguments the function takes.
@@ -74,6 +91,7 @@ impl ByteCodeFunction {
     pub fn with_str(vm: &mut Vm, s: &str, arena: &Bump) -> Result<ByteCodeFunction, CompileError> {
         let instructions = crate::compiler::compile(vm, s, arena)?;
         Ok(ByteCodeFunction {
+            name: None,
             instructions,
             args: 0,
         })

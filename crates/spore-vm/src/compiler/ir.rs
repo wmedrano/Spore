@@ -20,6 +20,7 @@ pub enum Ir<'a> {
     Define { symbol: &'a str, expr: &'a Ir<'a> },
     /// A lambda expression.
     Lambda {
+        name: Option<&'a str>,
         args: &'a [&'a str],
         exprs: &'a [Self],
     },
@@ -121,12 +122,19 @@ impl<'a> IrBuilder<'a> {
                     },
                     Some((_, ParsedText::Identifier("lambda"))) => match children.as_slice() {
                         [_lambda, args, exprs @ ..] => match args {
-                            Ast::Tree { children, .. } => self.build_lambda(children, exprs),
+                            Ast::Tree { children, .. } => self.build_lambda(None, children, exprs),
                             Ast::Leaf { span } => Err(IrError::BadLambda(*span)),
                         },
                         _ => Err(IrError::BadLambda(*span)),
                     },
-                    _ => self.build_function_call(*span, children.as_slice()),
+                    _ => {
+                        let span = *span;
+                        let text = span.text(self.source);
+                        if text == "define" || text == "lambda" {
+                            return Err(IrError::BadDefine(span));
+                        }
+                        self.build_function_call(span, children.as_slice())
+                    }
                 }
             }
             Ast::Leaf { span } => match ParsedText::new(span.text(self.source)) {
@@ -155,7 +163,12 @@ impl<'a> IrBuilder<'a> {
     }
 
     /// Builds a lambda IR.
-    fn build_lambda(&self, args: &[Ast], exprs: &[Ast]) -> Result<Ir<'a>, IrError> {
+    fn build_lambda(
+        &self,
+        name: Option<&'a str>,
+        args: &[Ast],
+        exprs: &[Ast],
+    ) -> Result<Ir<'a>, IrError> {
         let mut parsed_args = BumpVec::with_capacity_in(args.len(), self.arena);
         for arg in args {
             match arg {
@@ -171,6 +184,7 @@ impl<'a> IrBuilder<'a> {
             ir_exprs.push(self.build(expr)?);
         }
         Ok(Ir::Lambda {
+            name,
             args: parsed_args.into_bump_slice(),
             exprs: ir_exprs.into_bump_slice(),
         })
@@ -214,7 +228,7 @@ impl<'a> IrBuilder<'a> {
             }
             ParsedText::Identifier(symbol) => symbol,
         };
-        let lambda = self.build_lambda(args, exprs)?;
+        let lambda = self.build_lambda(Some(symbol_text), args, exprs)?;
         Ok(Ir::Define {
             symbol: symbol_text,
             expr: self.arena.alloc(lambda),
@@ -311,6 +325,7 @@ mod tests {
             Ir::Define {
                 symbol: "foo",
                 expr: &Ir::Lambda {
+                    name: Some("foo"),
                     args: &[],
                     exprs: &[Ir::Constant(Constant::Int(1))]
                 }

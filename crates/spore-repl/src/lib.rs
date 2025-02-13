@@ -29,7 +29,7 @@ impl Repl {
             writer,
             "${n} => {val}",
             n = self.expressions_count,
-            val = val.formatter(&self.vm)
+            val = val.formatted(&self.vm)
         )?;
         self.expressions_count += 1;
         Ok(())
