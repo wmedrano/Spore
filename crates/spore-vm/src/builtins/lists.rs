@@ -15,12 +15,12 @@ fn list_fn(vm: &mut Vm) -> VmResult<Val> {
     Ok(Val::List(lst))
 }
 
-fn list_len_fn(vm: &Vm, lst: Val) -> VmResult<Val> {
+fn list_len_fn(vm: &mut Vm, lst: Val) -> VmResult<Val> {
     let lst = lst.as_list(vm).ok_or_else(|| VmError::WrongType)?;
     Ok(Val::Int(lst.len() as i64))
 }
 
-fn nth_fn(vm: &Vm, lst: Val, idx: Val) -> VmResult<Val> {
+fn nth_fn(vm: &mut Vm, lst: Val, idx: Val) -> VmResult<Val> {
     let idx = match idx {
         Val::Int(x) => {
             if x < 0 {

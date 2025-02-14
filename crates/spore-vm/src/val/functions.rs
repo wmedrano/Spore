@@ -41,7 +41,7 @@ impl NativeFunction {
     }
 
     /// Creates a new native function that takes a single argument.
-    pub fn with_arg_1<F: 'static + Fn(&Vm, Val) -> VmResult<Val>>(
+    pub fn with_arg_1<F: 'static + Fn(&mut Vm, Val) -> VmResult<Val>>(
         name: &str,
         f: F,
     ) -> NativeFunction {
@@ -59,7 +59,7 @@ impl NativeFunction {
     }
 
     /// Creates a new native function that takes two arguments.
-    pub fn with_arg_2<F: 'static + Fn(&Vm, Val, Val) -> VmResult<Val>>(
+    pub fn with_arg_2<F: 'static + Fn(&mut Vm, Val, Val) -> VmResult<Val>>(
         name: &str,
         f: F,
     ) -> NativeFunction {
@@ -69,6 +69,24 @@ impl NativeFunction {
                 [arg1, arg2] => f(vm, *arg1, *arg2),
                 _ => Err(VmError::WrongArity {
                     expected: 2,
+                    actual: args.len() as u32,
+                }),
+            }
+        };
+        NativeFunction::new(name, new_f)
+    }
+
+    /// Creates a new native function that takes three arguments.
+    pub fn with_arg_3<F: 'static + Fn(&mut Vm, Val, Val, Val) -> VmResult<Val>>(
+        name: &str,
+        f: F,
+    ) -> NativeFunction {
+        let new_f = move |vm: &mut Vm| {
+            let args = vm.args();
+            match args {
+                [arg1, arg2, arg3] => f(vm, *arg1, *arg2, *arg3),
+                _ => Err(VmError::WrongArity {
+                    expected: 3,
                     actual: args.len() as u32,
                 }),
             }

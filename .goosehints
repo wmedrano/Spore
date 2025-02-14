@@ -1,3 +1,9 @@
-- When finalizing files, run `cargo test` to ensure the project is in a good state.
-- Unit test function names should follow the form <scenario>_<expectation>.
-- Use `cargo test` to run unit tests and check the build.
+When finalizing files, run `cargo test` to ensure the project is in a good state.
+
+Unit test function names should follow the form <scenario>_<expectation>.
+
+Use `cargo test` to run unit tests and check the build.
+
+Do not stage or commit changes with git.
+
+Do not use assert!(x.is_err()) in unit tests. Check for the correct error with something like assert_eq!(x, Err(...));

@@ -1,5 +1,6 @@
-pub mod lists;
+mod lists;
 mod math;
+mod structs;
 
 /// The internal symbol used to define a new value.
 pub const INTERNAL_DEFINE_FUNCTION: &str = "%define";
@@ -15,7 +16,9 @@ pub fn register_builtins(vm: &mut Vm) -> &mut Vm {
         .register_native_function(NativeFunction::with_args("do", do_fn))
         .register_native_function(NativeFunction::with_args("throw", throw_fn));
     math::register(vm);
-    lists::register(vm)
+    lists::register(vm);
+    structs::register(vm);
+    vm
 }
 
 /// Defines a symbol in the global scope.

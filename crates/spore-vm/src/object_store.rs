@@ -9,7 +9,7 @@ use crate::{
         Val,
     },
     vm::StackFrame,
-    SporeList, SporeString,
+    SporeList, SporeString, SporeStruct,
 };
 
 /// An identifier for an object in the object store.
@@ -151,6 +151,8 @@ pub struct Objects {
     pub strings: TypedObjectStore<SporeString>,
     /// The store for lists.
     pub lists: TypedObjectStore<SporeList>,
+    /// The store for structs.
+    pub structs: TypedObjectStore<SporeStruct>,
     /// The store for native functions.
     pub native_functions: TypedObjectStore<NativeFunction>,
     /// The store for bytecode functions.
@@ -175,8 +177,17 @@ impl Objects {
         self.lists.register(lst.into(), self.reachable_color.swap())
     }
 
-    pub fn list(&self, list_id: ObjectId<SporeList>) -> Option<&SporeList> {
+    pub fn register_struct(&mut self, strct: impl Into<SporeStruct>) -> ObjectId<SporeStruct> {
+        self.structs
+            .register(strct.into(), self.reachable_color.swap())
+    }
+
+    pub fn get_list(&self, list_id: ObjectId<SporeList>) -> Option<&SporeList> {
         self.lists.get(list_id)
+    }
+
+    pub fn get_struct(&self, struct_id: ObjectId<SporeStruct>) -> Option<&SporeStruct> {
+        self.structs.get(struct_id)
     }
 
     /// Runs garbage collection.
@@ -252,6 +263,13 @@ impl Objects {
                     }
                 }
             }
+            Val::Struct(id) => {
+                if let Some(strct) = self.structs.maybe_color(id, self.reachable_color) {
+                    for v in strct.values() {
+                        queue.push(*v);
+                    }
+                }
+            }
             Val::NativeFunction(id) => {
                 self.native_functions.maybe_color(id, self.reachable_color);
             }
@@ -286,6 +304,9 @@ impl Objects {
     /// This function sweeps the object store, collecting any objects that are not marked with the current reachable color.
     fn sweep(&mut self) {
         self.reachable_color = self.reachable_color.swap();
+        self.strings.sweep_color(self.reachable_color);
+        self.lists.sweep_color(self.reachable_color);
+        self.structs.sweep_color(self.reachable_color);
         self.native_functions.sweep_color(self.reachable_color);
         self.bytecode_functions.sweep_color(self.reachable_color);
     }

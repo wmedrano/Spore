@@ -117,8 +117,9 @@ impl Vm {
         self.objects.symbols.symbol_name(symbol_id)
     }
 
-    pub fn get_or_create_symbol_id(&mut self, name: &str) -> SymbolId {
-        self.objects.symbols.symbol_id(name)
+    /// Make a new symbol and return it as a `Val`.
+    pub fn make_symbol(&mut self, name: &str) -> Val {
+        Val::Symbol(self.objects.symbols.symbol_id(name))
     }
 }
 

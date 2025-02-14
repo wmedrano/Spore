@@ -4,7 +4,7 @@ pub mod symbol;
 use functions::{ByteCodeFunction, NativeFunction};
 use symbol::SymbolId;
 
-use crate::{object_store::ObjectId, vm::Vm, SporeList, SporeString};
+use crate::{object_store::ObjectId, vm::Vm, SporeList, SporeString, SporeStruct};
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 /// Represents a value in the VM.
@@ -23,6 +23,8 @@ pub enum Val {
     String(ObjectId<SporeString>),
     /// Contains a list of values.
     List(ObjectId<SporeList>),
+    /// Contains a map from field to value.
+    Struct(ObjectId<SporeStruct>),
     /// Contains a native function.
     NativeFunction(ObjectId<NativeFunction>),
     /// Contains a bytecode function.
@@ -42,7 +44,21 @@ impl Val {
 
     pub fn as_list(self, vm: &Vm) -> Option<&SporeList> {
         match self {
-            Val::List(object_id) => vm.objects.list(object_id),
+            Val::List(object_id) => vm.objects.get_list(object_id),
+            _ => None,
+        }
+    }
+
+    pub fn as_struct(self, vm: &Vm) -> Option<&SporeStruct> {
+        match self {
+            Val::Struct(object_id) => vm.objects.get_struct(object_id),
+            _ => None,
+        }
+    }
+
+    pub fn as_symbol_id(self) -> Option<SymbolId> {
+        match self {
+            Val::Symbol(x) => Some(x),
             _ => None,
         }
     }
@@ -98,6 +114,20 @@ impl std::fmt::Display for ValFormatter<'_> {
                     write!(f, ")")
                 }
                 None => write!(f, "(gc-list-{})", list_id.as_num()),
+            },
+            Val::Struct(struct_id) => match self.vm.objects.structs.get(struct_id) {
+                Some(lst) => {
+                    write!(f, "(struct ")?;
+                    for (idx, (sym, v)) in lst.iter().enumerate() {
+                        let sym = Val::Symbol(*sym);
+                        if idx > 0 {
+                            write!(f, " ")?;
+                        }
+                        write!(f, "{} {}", sym.formatted(self.vm), v.formatted(self.vm))?;
+                    }
+                    write!(f, ")")
+                }
+                None => write!(f, "(gc-list-{})", struct_id.as_num()),
             },
             Val::NativeFunction(object_id) => {
                 match self.vm.objects.native_functions.get(object_id) {
