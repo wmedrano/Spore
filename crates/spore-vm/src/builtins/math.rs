@@ -4,9 +4,9 @@ use crate::{
 };
 
 pub fn register(vm: &mut Vm) -> &mut Vm {
-    vm.register_native_function(NativeFunction::with_args("+", plus_fn))
-        .register_native_function(NativeFunction::with_args("-", minus_fn))
-        .register_native_function(NativeFunction::with_args("<", less_fn))
+    vm.register_native_function(NativeFunction::with_arg_list("+", plus_fn))
+        .register_native_function(NativeFunction::with_arg_list("-", minus_fn))
+        .register_native_function(NativeFunction::with_arg_list("<", less_fn))
 }
 
 /// Adds the given arguments.

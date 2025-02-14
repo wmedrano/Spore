@@ -117,9 +117,14 @@ impl Vm {
         self.objects.symbols.symbol_name(symbol_id)
     }
 
+    /// Make a new symbol and return it as a symbol id.
+    pub fn make_symbol_id(&mut self, name: &str) -> SymbolId {
+        self.objects.symbols.symbol_id(name)
+    }
+
     /// Make a new symbol and return it as a `Val`.
     pub fn make_symbol(&mut self, name: &str) -> Val {
-        Val::Symbol(self.objects.symbols.symbol_id(name))
+        Val::Symbol(self.make_symbol_id(name))
     }
 }
 
@@ -469,10 +474,10 @@ mod tests {
     fn recursive_function_call() {
         let mut vm = Vm::default();
         assert_eq!(
-            vm.eval_str("(define (fib n) (if (< n 2) 1 (+ (fib (- n 2)) (fib (- n 1)))))")
+            vm.eval_str("(define (fib n) (if (< n 2) n (+ (fib (- n 2)) (fib (- n 1)))))")
                 .unwrap(),
             Val::Void
         );
-        assert_eq!(vm.eval_str("(fib 10)").unwrap(), Val::Int(89));
+        assert_eq!(vm.eval_str("(fib 10)").unwrap(), Val::Int(55));
     }
 }

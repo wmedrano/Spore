@@ -127,7 +127,7 @@ mod tests {
         let got = repl.execute_to_string("(undefined)");
         assert_eq!(
             got,
-            Err(VmError::SymbolNotFound(repl.vm.make_symbol("undefined")))
+            Err(VmError::SymbolNotFound(repl.vm.make_symbol_id("undefined")))
         );
     }
 }

@@ -5,8 +5,8 @@ use crate::{
 
 pub fn register(vm: &mut Vm) -> &mut Vm {
     vm.register_native_function(NativeFunction::new("list", list_fn))
-        .register_native_function(NativeFunction::with_arg_1("list-len", list_len_fn))
-        .register_native_function(NativeFunction::with_arg_2("nth", nth_fn))
+        .register_native_function(NativeFunction::with_args_1("list-len", list_len_fn))
+        .register_native_function(NativeFunction::with_args_2("nth", nth_fn))
 }
 
 fn list_fn(vm: &mut Vm) -> VmResult<Val> {

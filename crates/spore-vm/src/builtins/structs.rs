@@ -6,7 +6,7 @@ use crate::{
 
 pub fn register(vm: &mut Vm) -> &mut Vm {
     vm.register_native_function(NativeFunction::new("struct", struct_fn))
-        .register_native_function(NativeFunction::with_arg_2("struct-get", struct_get_fn))
+        .register_native_function(NativeFunction::with_args_2("struct-get", struct_get_fn))
         .register_native_function(NativeFunction::with_arg_3("struct-set!", struct_set_fn))
 }
 
@@ -71,8 +71,8 @@ mod tests {
     #[test]
     fn struct_with_args_returns_struct_with_elements() {
         let mut vm = Vm::default();
-        let val_sym1 = vm.make_symbol("test");
-        let val_sym2 = vm.make_symbol("test2");
+        let val_sym1 = vm.make_symbol_id("test");
+        let val_sym2 = vm.make_symbol_id("test2");
         let got = vm
             .eval_str("(struct 'test 1 'test2 2)")
             .unwrap()
@@ -80,13 +80,7 @@ mod tests {
             .unwrap();
         assert_eq!(
             got,
-            &SporeStruct::from_iter(
-                [
-                    (val_sym1.as_symbol_id().unwrap(), Val::Int(1)),
-                    (val_sym2.as_symbol_id().unwrap(), Val::Int(2))
-                ]
-                .into_iter()
-            )
+            &SporeStruct::from_iter([(val_sym1, Val::Int(1)), (val_sym2, Val::Int(2))].into_iter())
         );
     }
 
@@ -101,18 +95,14 @@ mod tests {
     #[test]
     fn struct_set_sets_element_at_key() {
         let mut vm = Vm::default();
-        let val_sym1 = vm.make_symbol("test");
-        let val_sym2 = vm.make_symbol("test2");
+        let val_sym1 = vm.make_symbol_id("test");
+        let val_sym2 = vm.make_symbol_id("test2");
         vm.eval_str("(define s (struct 'test 1 'test2 2))").unwrap();
         assert_eq!(vm.eval_str("(struct-set! s 'test 10)"), Ok(Val::Void));
         assert_eq!(
             vm.eval_str("s").unwrap().as_struct(&vm).unwrap(),
             &SporeStruct::from_iter(
-                [
-                    (val_sym1.as_symbol_id().unwrap(), Val::Int(10)),
-                    (val_sym2.as_symbol_id().unwrap(), Val::Int(2))
-                ]
-                .into_iter()
+                [(val_sym1, Val::Int(10)), (val_sym2, Val::Int(2))].into_iter()
             )
         );
     }
