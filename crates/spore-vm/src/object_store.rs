@@ -9,7 +9,7 @@ use crate::{
         Val,
     },
     vm::StackFrame,
-    SporeString,
+    SporeList, SporeString,
 };
 
 /// An identifier for an object in the object store.
@@ -149,6 +149,8 @@ pub struct Objects {
     pub reachable_color: GcColor,
     /// The store for strings.
     pub strings: TypedObjectStore<SporeString>,
+    /// The store for lists.
+    pub lists: TypedObjectStore<SporeList>,
     /// The store for native functions.
     pub native_functions: TypedObjectStore<NativeFunction>,
     /// The store for bytecode functions.
@@ -167,6 +169,14 @@ impl Objects {
 
     pub fn register_string(&mut self, s: impl Into<SporeString>) -> ObjectId<SporeString> {
         self.strings.register(s.into(), self.reachable_color.swap())
+    }
+
+    pub fn register_list(&mut self, lst: impl Into<SporeList>) -> ObjectId<SporeList> {
+        self.lists.register(lst.into(), self.reachable_color.swap())
+    }
+
+    pub fn list(&self, list_id: ObjectId<SporeList>) -> Option<&SporeList> {
+        self.lists.get(list_id)
     }
 
     /// Runs garbage collection.
@@ -234,6 +244,13 @@ impl Objects {
         match val {
             Val::String(id) => {
                 self.strings.maybe_color(id, self.reachable_color);
+            }
+            Val::List(id) => {
+                if let Some(lst) = self.lists.maybe_color(id, self.reachable_color) {
+                    for v in lst.iter() {
+                        queue.push(*v);
+                    }
+                }
             }
             Val::NativeFunction(id) => {
                 self.native_functions.maybe_color(id, self.reachable_color);

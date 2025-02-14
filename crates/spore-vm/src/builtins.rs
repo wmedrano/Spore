@@ -1,3 +1,4 @@
+pub mod lists;
 mod math;
 
 /// The internal symbol used to define a new value.
@@ -13,7 +14,8 @@ pub fn register_builtins(vm: &mut Vm) -> &mut Vm {
     vm.register_native_function(NativeFunction::new(INTERNAL_DEFINE_FUNCTION, define_fn))
         .register_native_function(NativeFunction::with_args("do", do_fn))
         .register_native_function(NativeFunction::with_args("throw", throw_fn));
-    math::register(vm)
+    math::register(vm);
+    lists::register(vm)
 }
 
 /// Defines a symbol in the global scope.
@@ -32,12 +34,12 @@ fn define_fn(vm: &mut Vm) -> VmResult<Val> {
 }
 
 /// Returns the last value in the list of arguments.
-fn do_fn(args: &[Val]) -> VmResult<Val> {
+fn do_fn(_: &Vm, args: &[Val]) -> VmResult<Val> {
     Ok(args.last().copied().unwrap_or(Val::Void))
 }
 
 /// Throw an error.
-fn throw_fn(_: &[Val]) -> VmResult<Val> {
+fn throw_fn(_: &Vm, _: &[Val]) -> VmResult<Val> {
     Err(VmError::Custom("exception thrown".into()))
 }
 

@@ -1,6 +1,7 @@
 use std::rc::Rc;
 
 use compact_str::CompactString;
+use val::Val;
 
 /// Builtin functions.
 pub mod builtins;
@@ -22,3 +23,5 @@ pub type SporeRc<T> = Rc<T>;
 
 /// The physical string representation.
 pub type SporeString = CompactString;
+
+pub type SporeList = Vec<Val>;

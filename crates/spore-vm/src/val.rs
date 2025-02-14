@@ -4,7 +4,7 @@ pub mod symbol;
 use functions::{ByteCodeFunction, NativeFunction};
 use symbol::SymbolId;
 
-use crate::{object_store::ObjectId, vm::Vm, SporeString};
+use crate::{object_store::ObjectId, vm::Vm, SporeList, SporeString};
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 /// Represents a value in the VM.
@@ -21,6 +21,8 @@ pub enum Val {
     Symbol(SymbolId),
     /// Contains a string.
     String(ObjectId<SporeString>),
+    /// Contains a list of values.
+    List(ObjectId<SporeList>),
     /// Contains a native function.
     NativeFunction(ObjectId<NativeFunction>),
     /// Contains a bytecode function.
@@ -36,6 +38,13 @@ impl Val {
     /// Returns true if `is_truthy` is not false or void.
     pub fn is_truthy(self) -> bool {
         !matches!(self, Val::Bool(false) | Val::Void)
+    }
+
+    pub fn as_list(self, vm: &Vm) -> Option<&SporeList> {
+        match self {
+            Val::List(object_id) => vm.objects.list(object_id),
+            _ => None,
+        }
     }
 }
 
@@ -75,6 +84,20 @@ impl std::fmt::Display for ValFormatter<'_> {
             Val::String(string_id) => match self.vm.objects.strings.get(string_id) {
                 Some(x) => write!(f, "{x}"),
                 None => write!(f, "(gc-string-{})", string_id.as_num()),
+            },
+            Val::List(list_id) => match self.vm.objects.lists.get(list_id) {
+                Some(lst) => {
+                    write!(f, "(")?;
+                    for (idx, v) in lst.iter().enumerate() {
+                        if idx == 0 {
+                            write!(f, "{}", v.formatted(self.vm))?;
+                        } else {
+                            write!(f, " {}", v.formatted(self.vm))?;
+                        }
+                    }
+                    write!(f, ")")
+                }
+                None => write!(f, "(gc-list-{})", list_id.as_num()),
             },
             Val::NativeFunction(object_id) => {
                 match self.vm.objects.native_functions.get(object_id) {

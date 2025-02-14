@@ -10,7 +10,7 @@ pub fn register(vm: &mut Vm) -> &mut Vm {
 }
 
 /// Adds the given arguments.
-fn plus_fn(args: &[Val]) -> VmResult<Val> {
+fn plus_fn(_: &Vm, args: &[Val]) -> VmResult<Val> {
     let mut int_sum = 0;
     let mut float_sum = 0.0;
     for arg in args {
@@ -29,7 +29,7 @@ fn plus_fn(args: &[Val]) -> VmResult<Val> {
 }
 
 /// Subtracts all arguments from the first. If there is only one argument, then it is negated.
-fn minus_fn(args: &[Val]) -> VmResult<Val> {
+fn minus_fn(vm: &Vm, args: &[Val]) -> VmResult<Val> {
     match args {
         [] => Err(VmError::WrongArity {
             expected: 1,
@@ -38,14 +38,14 @@ fn minus_fn(args: &[Val]) -> VmResult<Val> {
         [Val::Int(x)] => Ok(Val::Int(-*x)),
         [Val::Float(x)] => Ok(Val::Float(-*x)),
         [leading, rest @ ..] => {
-            let sub = minus_fn(&[plus_fn(rest)?])?;
-            Ok(plus_fn(&[*leading, sub])?)
+            let sub = minus_fn(vm, &[plus_fn(vm, rest)?])?;
+            Ok(plus_fn(vm, &[*leading, sub])?)
         }
     }
 }
 
 /// Returns `true` if the arguments are ordered from least to greatest.
-fn less_fn(args: &[Val]) -> VmResult<Val> {
+fn less_fn(_: &Vm, args: &[Val]) -> VmResult<Val> {
     for window in args.windows(2) {
         match window {
             [a, b] => {
