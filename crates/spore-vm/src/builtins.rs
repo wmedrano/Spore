@@ -5,6 +5,8 @@ mod structs;
 /// The internal symbol used to define a new value.
 pub const INTERNAL_DEFINE_FUNCTION: &str = "%define";
 
+use compact_str::format_compact;
+
 use crate::{
     val::{functions::NativeFunction, Val},
     vm::{Vm, VmError, VmResult},
@@ -19,6 +21,7 @@ pub fn register_builtins(vm: &mut Vm) -> &mut Vm {
     ))
     .register_native_function(NativeFunction::with_arg_list("do", do_fn))
     .register_native_function(NativeFunction::with_arg_list("throw", throw_fn))
+    .register_native_function(NativeFunction::with_args_1("val->string", val_to_string_fn))
     .register_native_function(NativeFunction::with_args_0("help", help_fn));
     math::register(vm);
     lists::register(vm);
@@ -46,6 +49,11 @@ fn do_fn(_: &Vm, args: &[Val]) -> VmResult<Val> {
 /// Throw an error.
 fn throw_fn(_: &Vm, _: &[Val]) -> VmResult<Val> {
     Err(VmError::Custom("exception thrown".into()))
+}
+
+fn val_to_string_fn(vm: &mut Vm, val: Val) -> VmResult<Val> {
+    let s = format_compact!("{}", val.formatted(vm));
+    Ok(vm.make_string(s))
 }
 
 /// Print the help.

@@ -20,7 +20,7 @@ use crate::{
         symbol::SymbolId,
         Val,
     },
-    SporeRc,
+    SporeRc, SporeString,
 };
 
 #[derive(Debug)]
@@ -125,6 +125,10 @@ impl Vm {
     /// Make a new symbol and return it as a `Val`.
     pub fn make_symbol(&mut self, name: &str) -> Val {
         Val::Symbol(self.make_symbol_id(name))
+    }
+
+    pub fn make_string(&mut self, s: impl Into<SporeString>) -> Val {
+        Val::String(self.objects.register_string(s))
     }
 }
 

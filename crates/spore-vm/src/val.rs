@@ -88,6 +88,16 @@ impl std::fmt::Debug for ValFormatter<'_> {
 
 impl std::fmt::Display for ValFormatter<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let max_depth = 4;
+        self.fmt_impl(f, max_depth)
+    }
+}
+
+impl ValFormatter<'_> {
+    fn fmt_impl(&self, f: &mut std::fmt::Formatter<'_>, max_depth: usize) -> std::fmt::Result {
+        if max_depth == 0 {
+            return write!(f, "..");
+        }
         match self.val {
             Val::Void => write!(f, "void"),
             Val::Bool(x) => write!(f, "{x}"),
@@ -105,11 +115,10 @@ impl std::fmt::Display for ValFormatter<'_> {
                 Some(lst) => {
                     write!(f, "(")?;
                     for (idx, v) in lst.iter().enumerate() {
-                        if idx == 0 {
-                            write!(f, "{}", v.formatted(self.vm))?;
-                        } else {
-                            write!(f, " {}", v.formatted(self.vm))?;
+                        if idx > 0 {
+                            write!(f, " ")?;
                         }
+                        v.formatted(self.vm).fmt_impl(f, max_depth - 1)?;
                     }
                     write!(f, ")")
                 }
@@ -123,7 +132,9 @@ impl std::fmt::Display for ValFormatter<'_> {
                         if idx > 0 {
                             write!(f, " ")?;
                         }
-                        write!(f, "{} {}", sym.formatted(self.vm), v.formatted(self.vm))?;
+                        sym.formatted(self.vm).fmt_impl(f, max_depth - 1)?;
+                        write!(f, " ")?;
+                        v.formatted(self.vm).fmt_impl(f, max_depth - 1)?;
                     }
                     write!(f, ")")
                 }
