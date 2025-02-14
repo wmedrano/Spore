@@ -283,7 +283,12 @@ impl Objects {
                     }
                 }
             }
-            Val::Void | Val::Bool(_) | Val::Int(_) | Val::Float(_) | Val::Symbol(_) => (),
+            Val::Void
+            | Val::Bool(_)
+            | Val::Int(_)
+            | Val::Float(_)
+            | Val::Symbol(_)
+            | Val::DataType(_) => (),
         }
     }
 

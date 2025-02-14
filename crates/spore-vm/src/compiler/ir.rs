@@ -71,7 +71,7 @@ impl<'a> ParsedText<'a> {
                 return ParsedText::Constant(Constant::Float(x));
             }
         }
-        if text.starts_with('"') && text.ends_with('"') {
+        if text.starts_with('"') && text.ends_with('"') && text.len() > 1 {
             return ParsedText::Constant(Constant::String(&text[1..text.len() - 1]));
         }
         if let Some(stripped) = text.strip_prefix('\'') {

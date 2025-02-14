@@ -29,6 +29,22 @@ pub enum Val {
     NativeFunction(ObjectId<NativeFunction>),
     /// Contains a bytecode function.
     BytecodeFunction(ObjectId<ByteCodeFunction>),
+    /// Contains a datatype.
+    DataType(DataType),
+}
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum DataType {
+    Void,
+    Bool,
+    Int,
+    Float,
+    Symbol,
+    String,
+    List,
+    StructT,
+    Function,
+    DataType,
 }
 
 impl Val {
@@ -159,6 +175,18 @@ impl ValFormatter<'_> {
                     None => write!(f, "(fn-{})", object_id.as_num()),
                 }
             }
+            Val::DataType(dt) => match dt {
+                DataType::Void => write!(f, "type-void"),
+                DataType::Bool => write!(f, "type-bool"),
+                DataType::Int => write!(f, "type-int"),
+                DataType::Float => write!(f, "type-float"),
+                DataType::Symbol => write!(f, "type-symbol"),
+                DataType::String => write!(f, "type-string"),
+                DataType::List => write!(f, "type-list"),
+                DataType::StructT => write!(f, "type-struct"),
+                DataType::Function => write!(f, "type-function"),
+                DataType::DataType => write!(f, "type-type"),
+            },
         }
     }
 }

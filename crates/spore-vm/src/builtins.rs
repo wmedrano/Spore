@@ -8,7 +8,7 @@ pub const INTERNAL_DEFINE_FUNCTION: &str = "%define";
 use compact_str::format_compact;
 
 use crate::{
-    val::{functions::NativeFunction, Val},
+    val::{functions::NativeFunction, DataType, Val},
     vm::{Vm, VmError, VmResult},
     SporeList, SporeStruct,
 };
@@ -22,6 +22,7 @@ pub fn register_builtins(vm: &mut Vm) -> &mut Vm {
     .register_native_function(NativeFunction::with_arg_list("do", do_fn))
     .register_native_function(NativeFunction::with_arg_list("throw", throw_fn))
     .register_native_function(NativeFunction::with_args_1("val->string", val_to_string_fn))
+    .register_native_function(NativeFunction::with_args_1("val->type", val_to_type_fn))
     .register_native_function(NativeFunction::with_args_0("help", help_fn));
     math::register(vm);
     lists::register(vm);
@@ -54,6 +55,23 @@ fn throw_fn(_: &Vm, _: &[Val]) -> VmResult<Val> {
 fn val_to_string_fn(vm: &mut Vm, val: Val) -> VmResult<Val> {
     let s = format_compact!("{}", val.formatted(vm));
     Ok(vm.make_string(s))
+}
+
+fn val_to_type_fn(_: &mut Vm, val: Val) -> VmResult<Val> {
+    let t = match val {
+        Val::Void => DataType::Void,
+        Val::Bool(_) => DataType::Bool,
+        Val::Int(_) => DataType::Int,
+        Val::Float(_) => DataType::Float,
+        Val::Symbol(_) => DataType::Symbol,
+        Val::String(_) => DataType::String,
+        Val::List(_) => DataType::List,
+        Val::Struct(_) => DataType::StructT,
+        Val::NativeFunction(_) => DataType::Function,
+        Val::BytecodeFunction(_) => DataType::Function,
+        Val::DataType(_) => DataType::DataType,
+    };
+    Ok(Val::DataType(t))
 }
 
 /// Print the help.
