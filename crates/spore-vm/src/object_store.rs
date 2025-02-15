@@ -1,5 +1,7 @@
 use std::{collections::HashMap, hash::Hash, marker::PhantomData};
 
+use compact_str::CompactString;
+
 use crate::{
     instruction::Instruction,
     module::Module,
@@ -10,7 +12,7 @@ use crate::{
         Val,
     },
     vm::StackFrame,
-    SporeCustomType, SporeList, SporeString, SporeStruct,
+    SporeCustomType, SporeList, SporeStruct,
 };
 
 /// An identifier for an object in the object store.
@@ -149,7 +151,7 @@ pub struct Objects {
     /// The color used to mark reachable objects during GC.
     pub reachable_color: GcColor,
     /// The store for strings.
-    pub strings: TypedObjectStore<SporeString>,
+    pub strings: TypedObjectStore<CompactString>,
     /// The store for lists.
     pub lists: TypedObjectStore<SporeList>,
     /// The store for structs.
@@ -172,8 +174,8 @@ impl Objects {
             .register(bc, self.reachable_color.swap())
     }
 
-    pub fn register_string(&mut self, s: impl Into<SporeString>) -> ObjectId<SporeString> {
-        self.strings.register(s.into(), self.reachable_color.swap())
+    pub fn register_string(&mut self, s: CompactString) -> ObjectId<CompactString> {
+        self.strings.register(s, self.reachable_color.swap())
     }
 
     pub fn register_list(&mut self, lst: impl Into<SporeList>) -> ObjectId<SporeList> {
@@ -190,8 +192,8 @@ impl Objects {
         self.custom.register(custom, self.reachable_color.swap())
     }
 
-    pub fn get_str(&self, string_id: ObjectId<SporeString>) -> Option<&str> {
-        self.strings.get(string_id).map(SporeString::as_str)
+    pub fn get_str(&self, string_id: ObjectId<CompactString>) -> Option<&str> {
+        self.strings.get(string_id).map(CompactString::as_str)
     }
 
     pub fn get_list(&self, list_id: ObjectId<SporeList>) -> Option<&SporeList> {
@@ -315,6 +317,7 @@ impl Objects {
             | Val::Int(_)
             | Val::Float(_)
             | Val::Symbol(_)
+            | Val::ShortString(_)
             | Val::DataType(_) => (),
         }
     }

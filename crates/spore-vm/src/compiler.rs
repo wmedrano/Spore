@@ -87,7 +87,7 @@ impl Compiler<'_> {
                     Constant::Float(x) => Val::Float(*x),
                     Constant::Symbol(x) => Val::Symbol(self.vm.objects.symbols.symbol_id(x)),
                     // TODO: x should be parsed for escape sequences.
-                    Constant::String(x) => Val::String(self.vm.objects.register_string(*x)),
+                    Constant::String(x) => self.vm.make_string(*x),
                 };
                 dst.push(Instruction::Push(c));
             }

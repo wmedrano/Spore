@@ -21,9 +21,9 @@ use crate::{
     val::{
         functions::{ByteCodeFunction, NativeFunction},
         symbol::SymbolId,
-        Val,
+        ShortString, Val,
     },
-    SporeCustomType, SporeRc, SporeString,
+    SporeCustomType, SporeRc,
 };
 
 #[derive(Debug)]
@@ -153,10 +153,19 @@ impl Vm {
         Val::Symbol(self.make_symbol_id(name))
     }
 
-    pub fn make_string(&mut self, s: impl Into<SporeString>) -> Val {
-        Val::String(self.objects.register_string(s))
+    /// Make a new string.
+    pub fn make_string(&mut self, s: impl Into<CompactString>) -> Val {
+        let s = s.into();
+        match ShortString::new(&s) {
+            Some(s) => Val::ShortString(s),
+            None => {
+                let id = self.objects.register_string(s);
+                Val::String(id)
+            }
+        }
     }
 
+    /// Make a new custom value.
     pub fn make_custom(&mut self, custom: impl SporeCustomType) -> Val {
         let id = self.objects.register_custom(custom);
         Val::Custom(id)

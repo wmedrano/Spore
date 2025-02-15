@@ -66,6 +66,7 @@ fn val_to_type_fn(_: &mut Vm, val: Val) -> VmResult<Val> {
         Val::Float(_) => DataType::Float,
         Val::Symbol(_) => DataType::Symbol,
         Val::String(_) => DataType::String,
+        Val::ShortString(_) => DataType::String,
         Val::List(_) => DataType::List,
         Val::Struct(_) => DataType::StructT,
         Val::NativeFunction(_) => DataType::Function,

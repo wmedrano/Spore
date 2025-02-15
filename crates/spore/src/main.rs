@@ -1,16 +1,39 @@
+use clap::{Parser, ValueEnum};
 use ratatui::{DefaultTerminal, Frame};
 use spore_vm::{val::Val, vm::Vm};
 
 mod buffer;
 mod events;
 
+#[derive(Parser, Debug)]
+#[command(version, about, long_about = None)]
+struct Args {
+    #[arg(value_enum, short, long)]
+    pub mode: Mode,
+}
+
+#[derive(Copy, Clone, Parser, PartialEq, Default, Debug, ValueEnum)]
+pub enum Mode {
+    #[default]
+    Editor,
+    Repl,
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let args = Args::parse();
     let mut vm = Vm::default().apply(buffer::register_buffer);
-    let terminal = ratatui::init();
-    let result = run(&mut vm, terminal);
-    ratatui::restore();
-    spore_repl::Repl::new(vm).run()?;
-    result
+    match args.mode {
+        Mode::Editor => {
+            let terminal = ratatui::init();
+            let result = run(&mut vm, terminal);
+            ratatui::restore();
+            result
+        }
+        Mode::Repl => {
+            spore_repl::Repl::new(vm).run()?;
+            Ok(())
+        }
+    }
 }
 
 fn run(vm: &mut Vm, mut terminal: DefaultTerminal) -> Result<(), Box<dyn std::error::Error>> {
@@ -28,11 +51,8 @@ fn run(vm: &mut Vm, mut terminal: DefaultTerminal) -> Result<(), Box<dyn std::er
     .unwrap();
     let exit_sym = vm.make_symbol_id("exit?");
     while !vm.get_global(exit_sym).unwrap_or_default().is_truthy() {
-        let text = vm
-            .eval_str("(buffer->string text)")
-            .unwrap()
-            .as_str(&vm)
-            .unwrap();
+        let text_val = vm.eval_str("(buffer->string text)").unwrap();
+        let text = text_val.as_str(&vm).unwrap();
         terminal.draw(|frame: &mut Frame| frame.render_widget(text, frame.area()))?;
         handle_events(vm);
     }

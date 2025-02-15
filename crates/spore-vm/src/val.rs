@@ -2,11 +2,42 @@ pub mod custom;
 pub mod functions;
 pub mod symbol;
 
+use compact_str::CompactString;
 use custom::SporeCustom;
 use functions::{ByteCodeFunction, NativeFunction};
 use symbol::SymbolId;
 
-use crate::{object_store::ObjectId, vm::Vm, SporeCustomType, SporeList, SporeString, SporeStruct};
+use crate::{object_store::ObjectId, vm::Vm, SporeCustomType, SporeList, SporeStruct};
+
+/// The maximum length of a short string.
+///
+/// This is the highest possible value without increasing the size of `Val`. The size of `Val` is
+/// checked through unit tests.
+pub const SHORT_STR_LEN: usize = 14;
+
+#[derive(Copy, Clone, Debug, Default, PartialEq)]
+pub struct ShortString {
+    len: u8,
+    data: [u8; SHORT_STR_LEN],
+}
+
+impl ShortString {
+    pub fn new(s: &str) -> Option<ShortString> {
+        if s.len() > SHORT_STR_LEN {
+            return None;
+        }
+        let mut data = [0; SHORT_STR_LEN];
+        data[0..s.len()].copy_from_slice(s.as_bytes());
+        Some(ShortString {
+            len: s.len() as u8,
+            data,
+        })
+    }
+
+    pub fn as_str(&self) -> &str {
+        std::str::from_utf8(&self.data[0..self.len as usize]).unwrap()
+    }
+}
 
 #[derive(Copy, Clone, Debug, Default, PartialEq)]
 /// Represents a value in the VM.
@@ -23,7 +54,9 @@ pub enum Val {
     /// Represents a symbol.
     Symbol(SymbolId),
     /// Contains a string.
-    String(ObjectId<SporeString>),
+    String(ObjectId<CompactString>),
+    /// Contains a short string.
+    ShortString(ShortString),
     /// Contains a list of values.
     List(ObjectId<SporeList>),
     /// Contains a map from field to value.
@@ -68,9 +101,10 @@ impl Val {
         matches!(self, Val::Void)
     }
 
-    pub fn as_str(self, vm: &Vm) -> Option<&str> {
+    pub fn as_str<'a>(&'a self, vm: &'a Vm) -> Option<&'a str> {
         match self {
-            Val::String(string_id) => vm.objects.get_str(string_id),
+            Val::String(string_id) => vm.objects.get_str(*string_id),
+            Val::ShortString(s) => Some(s.as_str()),
             _ => None,
         }
     }
@@ -160,6 +194,7 @@ impl ValFormatter<'_> {
                 Some(x) => write!(f, "'{x}"),
                 None => write!(f, "'(symbol-{})", symbol_id.as_num()),
             },
+            Val::ShortString(s) => write!(f, "{}", s.as_str()),
             Val::String(string_id) => match self.vm.objects.strings.get(string_id) {
                 Some(x) => write!(f, "{x}"),
                 None => write!(f, "(gc-string-{})", string_id.as_num()),
