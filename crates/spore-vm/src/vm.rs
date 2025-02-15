@@ -101,9 +101,16 @@ impl Vm {
         self
     }
 
+    /// Set a global value.
     pub fn set_global(&mut self, symbol: SymbolId, value: Val) {
         let globals = self.modules.get_mut(&self.common_symbols.global).unwrap();
         globals.values.insert(symbol, value);
+    }
+
+    /// Get a global value or `None` if it does not exist.
+    pub fn get_global(&self, symbol: SymbolId) -> Option<Val> {
+        let globals = self.modules.get(&self.common_symbols.global).unwrap();
+        globals.values.get(&symbol).copied()
     }
 
     /// Returns the arguments passed to the current function.

@@ -1,8 +1,8 @@
-use std::time::{Duration, Instant};
-
-use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
+use compact_str::CompactString;
 use ratatui::{DefaultTerminal, Frame};
-use spore_vm::vm::Vm;
+use spore_vm::{val::symbol::SymbolId, vm::Vm};
+
+mod events;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let terminal = ratatui::init();
@@ -13,40 +13,34 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 fn run(mut terminal: DefaultTerminal) -> Result<(), Box<dyn std::error::Error>> {
     let mut vm = Vm::default();
-    vm.eval_str("(define text \"\")").unwrap();
+    let text_sym = vm.make_symbol_id("text");
+    set_text(&mut vm, text_sym, CompactString::const_new(""));
     loop {
-        let text = vm.eval_str("text").unwrap().as_str(&vm).unwrap();
+        let text = vm.get_global(text_sym).unwrap().as_str(&vm).unwrap();
         terminal.draw(|frame: &mut Frame| frame.render_widget(text, frame.area()))?;
-        if handle_events(&mut vm) == Action::Exit {
+        if handle_events(&mut vm, text_sym) == Action::Exit {
             break Ok(());
         }
     }
 }
 
-#[derive(PartialEq)]
+#[derive(Copy, Clone, PartialEq)]
 enum Action {
     Continue,
     Exit,
 }
 
-fn handle_events(vm: &mut Vm) -> Action {
-    let deadline = Instant::now() + Duration::from_millis(100);
-    while let Ok(true) = event::poll(Instant::now().duration_since(deadline)) {
-        match event::read().unwrap() {
-            Event::Key(KeyEvent {
-                code,
-                kind: KeyEventKind::Press,
-                ..
-            }) => {
-                if code == KeyCode::Esc {
-                    return Action::Exit;
-                }
-                let sym = vm.make_symbol_id("text");
-                let val = vm.make_string(format!("{code:?}"));
-                vm.set_global(sym, val);
-            }
-            _ => (),
+fn handle_events(vm: &mut Vm, text_sym: SymbolId) -> Action {
+    for event in events::events() {
+        if event == "<esc>" {
+            return Action::Exit;
         }
+        set_text(vm, text_sym, event);
     }
     Action::Continue
+}
+
+fn set_text(vm: &mut Vm, text_sym: SymbolId, text: CompactString) {
+    let val = vm.make_string(text);
+    vm.set_global(text_sym, val);
 }

@@ -50,7 +50,7 @@ pub fn compile<'a>(
     let mut instructions = Vec::new();
     let mut compiler = Compiler { vm, args: &[] };
     for ast in asts {
-        let ir = match ir::Ir::with_ast(source, &ast, arena) {
+        let ir = match ir::Ir::with_ast(source, ast, arena) {
             Ok(ir) => ir,
             Err(err) => return Err(CompileError::Ir(err)),
         };
