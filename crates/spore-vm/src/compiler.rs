@@ -44,11 +44,12 @@ impl std::fmt::Display for CompileError {
 pub fn compile<'a>(
     vm: &mut Vm,
     source: &'a str,
+    asts: impl Iterator<Item = &'a Ast>,
     arena: &'a Bump,
 ) -> Result<SporeRc<[Instruction]>, CompileError> {
     let mut instructions = Vec::new();
     let mut compiler = Compiler { vm, args: &[] };
-    for ast in Ast::with_source(source)? {
+    for ast in asts {
         let ir = match ir::Ir::with_ast(source, &ast, arena) {
             Ok(ir) => ir,
             Err(err) => return Err(CompileError::Ir(err)),

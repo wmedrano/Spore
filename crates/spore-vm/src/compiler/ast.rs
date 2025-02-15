@@ -108,7 +108,7 @@ impl Ast {
         }
     }
 
-    /// Returns the text of the leaf node.
+    /// Returns the text of the leaf node or `None` if `self` is not a leaf node.
     pub fn leaf_text<'a>(&self, source: &'a str) -> Option<&'a str> {
         match self {
             Ast::Leaf { span } => Some(span.text(source)),

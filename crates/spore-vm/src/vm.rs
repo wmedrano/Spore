@@ -11,7 +11,10 @@ pub struct CommonSymbols {
 
 use crate::{
     builtins::register_builtins,
-    compiler::CompileError,
+    compiler::{
+        ast::{Ast, AstError},
+        CompileError,
+    },
     instruction::Instruction,
     module::Module,
     object_store::{ObjectId, Objects},
@@ -186,6 +189,12 @@ impl From<std::fmt::Error> for VmError {
     }
 }
 
+impl From<AstError> for VmError {
+    fn from(value: AstError) -> VmError {
+        VmError::from(CompileError::from(value))
+    }
+}
+
 impl Vm {
     /// Evaluates a string of code.
     ///
@@ -193,6 +202,17 @@ impl Vm {
     /// executes the bytecode in the VM. It returns the resulting `Val` or an error
     /// if compilation or execution fails.
     pub fn eval_str(&mut self, s: &str) -> VmResult<Val> {
+        let mut ret = Val::Void;
+        for ast in Ast::with_source(s)? {
+            ret = self.eval_ast(s, &ast)?;
+        }
+        Ok(ret)
+    }
+
+    /// Evaluates an AST.
+    ///
+    /// This is similar to `eval_str`, but is more efficient if you already have an `Ast`.
+    pub fn eval_ast(&mut self, s: &str, ast: &Ast) -> VmResult<Val> {
         self.objects.run_gc(
             &self.stack,
             self.previous_stack_frames
@@ -201,7 +221,7 @@ impl Vm {
             self.modules.values(),
         );
         self.stack.clear();
-        let bytecode = ByteCodeFunction::with_str(self, s, &Bump::new())?;
+        let bytecode = ByteCodeFunction::new(self, s, ast, &Bump::new())?;
         self.eval_bytecode(bytecode)
     }
 

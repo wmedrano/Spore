@@ -53,7 +53,9 @@ pub fn tokenize(source: &str) -> impl '_ + Iterator<Item = Token> {
                     },
                 });
             }
-            '"' => return Some(parse_string(idx as u32, &mut source_iter)),
+            '"' => {
+                return Some(parse_string(idx as u32, &mut source_iter));
+            }
             _ => return Some(parse_token(idx as u32, &mut source_iter)),
         }
     })
@@ -76,11 +78,11 @@ fn parse_string(start: u32, source_iter: &mut Peekable<CharIndices>) -> Token {
             }
             Some(x) => x,
         };
-        if idx == 0 {
+        if idx as u32 == start {
             assert_eq!(ch, '"');
         }
         end = idx as u32;
-        if ch == '"' && idx != 0 {
+        if ch == '"' && idx as u32 != start {
             return Token {
                 span: Span {
                     start,
@@ -158,14 +160,23 @@ mod tests {
     #[test]
     fn quotes_surrounded_text_is_parsed_as_single_token() {
         assert_eq!(
-            tokenize_to_vec("\"hello world\""),
-            vec![(
-                "\"hello world\"",
-                Token {
-                    span: Span { start: 0, end: 13 },
-                    token_type: TokenType::Identifier
-                }
-            )]
+            tokenize_to_vec("\"hello\" \"world\""),
+            vec![
+                (
+                    "\"hello\"",
+                    Token {
+                        span: Span { start: 0, end: 7 },
+                        token_type: TokenType::Identifier
+                    }
+                ),
+                (
+                    "\"world\"",
+                    Token {
+                        span: Span { start: 8, end: 15 },
+                        token_type: TokenType::Identifier
+                    }
+                )
+            ]
         );
     }
 

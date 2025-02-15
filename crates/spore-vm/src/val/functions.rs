@@ -2,7 +2,7 @@ use bumpalo::Bump;
 use compact_str::CompactString;
 
 use crate::{
-    compiler::CompileError,
+    compiler::{ast::Ast, CompileError},
     instruction::Instruction,
     vm::{Vm, VmError, VmResult},
     SporeRc,
@@ -147,9 +147,14 @@ pub struct ByteCodeFunction {
 }
 
 impl ByteCodeFunction {
-    /// Creates a new bytecode function from a string.
-    pub fn with_str(vm: &mut Vm, s: &str, arena: &Bump) -> Result<ByteCodeFunction, CompileError> {
-        let instructions = crate::compiler::compile(vm, s, arena)?;
+    /// Creates a new bytecode function from an Ast.
+    pub fn new(
+        vm: &mut Vm,
+        s: &str,
+        ast: &Ast,
+        arena: &Bump,
+    ) -> Result<ByteCodeFunction, CompileError> {
+        let instructions = crate::compiler::compile(vm, s, std::iter::once(ast), arena)?;
         Ok(ByteCodeFunction {
             name: None,
             instructions,

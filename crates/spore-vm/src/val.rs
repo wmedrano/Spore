@@ -58,6 +58,10 @@ impl Val {
         !matches!(self, Val::Bool(false) | Val::Void)
     }
 
+    pub fn is_void(self) -> bool {
+        matches!(self, Val::Void)
+    }
+
     pub fn as_list(self, vm: &Vm) -> Option<&SporeList> {
         match self {
             Val::List(object_id) => vm.objects.get_list(object_id),
@@ -176,16 +180,16 @@ impl ValFormatter<'_> {
                 }
             }
             Val::DataType(dt) => match dt {
-                DataType::Void => write!(f, "type-void"),
-                DataType::Bool => write!(f, "type-bool"),
-                DataType::Int => write!(f, "type-int"),
-                DataType::Float => write!(f, "type-float"),
-                DataType::Symbol => write!(f, "type-symbol"),
-                DataType::String => write!(f, "type-string"),
-                DataType::List => write!(f, "type-list"),
-                DataType::StructT => write!(f, "type-struct"),
-                DataType::Function => write!(f, "type-function"),
-                DataType::DataType => write!(f, "type-type"),
+                DataType::Void => write!(f, "(type-void)"),
+                DataType::Bool => write!(f, "(type-bool)"),
+                DataType::Int => write!(f, "(type-int)"),
+                DataType::Float => write!(f, "(type-float)"),
+                DataType::Symbol => write!(f, "(type-symbol)"),
+                DataType::String => write!(f, "(type-string)"),
+                DataType::List => write!(f, "(type-list)"),
+                DataType::StructT => write!(f, "(type-struct)"),
+                DataType::Function => write!(f, "(type-function)"),
+                DataType::DataType => write!(f, "(type-type)"),
             },
         }
     }

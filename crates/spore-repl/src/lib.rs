@@ -68,23 +68,62 @@ impl Repl {
         Ok(())
     }
 
-    /// Executes a line of code in the REPL.
-    pub fn execute(&mut self, mut writer: impl std::fmt::Write, input: &str) -> VmResult<()> {
-        let val = self.vm.eval_str(input)?;
-        write!(
-            writer,
-            "${n} => {val}",
-            n = self.expressions_count,
-            val = val.formatted(&self.vm)
-        )?;
-        self.expressions_count += 1;
-        Ok(())
+    pub fn execute_to_string(&mut self, input: &str) -> VmResult<String> {
+        let asts = Ast::with_source(input)?;
+        match asts
+            .first()
+            .and_then(|ast| ast.leaf_text(input))
+            .unwrap_or("")
+        {
+            ",ast" => self.show_ast(input, &asts[1..]),
+            _ => self.execute_code(input, &asts),
+        }
     }
 
-    pub fn execute_to_string(&mut self, input: &str) -> VmResult<String> {
-        let mut res = String::new();
-        self.execute(&mut res, input)?;
-        Ok(res)
+    fn show_ast(&self, input: &str, asts: &[Ast]) -> VmResult<String> {
+        let mut res = Vec::with_capacity(asts.len());
+        for ast in asts {
+            res.push(format!("{:#?}", AstPrinter::new(input, ast)));
+        }
+        Ok(res.join("\n"))
+    }
+
+    fn execute_code(&mut self, input: &str, asts: &[Ast]) -> VmResult<String> {
+        let mut res = Vec::with_capacity(asts.len());
+        for ast in asts {
+            let val = self.vm.eval_ast(input, &ast)?;
+            if val.is_void() {
+                continue;
+            }
+            res.push(format!(
+                "${n} => {val}",
+                n = self.expressions_count,
+                val = val.formatted(&self.vm)
+            ));
+            self.expressions_count += 1;
+        }
+        Ok(res.join("\n"))
+    }
+}
+
+#[derive(Debug)]
+#[allow(dead_code)]
+enum AstPrinter<'a> {
+    Leaf(&'a str),
+    Tree(Vec<AstPrinter<'a>>),
+}
+
+impl<'a> AstPrinter<'a> {
+    fn new(source: &'a str, ast: &Ast) -> Self {
+        match ast {
+            Ast::Tree { children, .. } => AstPrinter::Tree(
+                children
+                    .iter()
+                    .map(|ast| AstPrinter::new(source, ast))
+                    .collect(),
+            ),
+            Ast::Leaf { span } => AstPrinter::Leaf(span.text(source)),
+        }
     }
 }
 
