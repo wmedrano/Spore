@@ -1,5 +1,6 @@
 mod lists;
 mod math;
+mod strings;
 mod structs;
 
 /// The internal symbol used to define a new value.
@@ -14,7 +15,7 @@ use crate::{
 };
 
 /// Registers the built-in functions in the VM.
-pub fn register_builtins(vm: &mut Vm) -> &mut Vm {
+pub fn register_builtins(vm: &mut Vm) {
     vm.register_native_function(NativeFunction::with_args_2(
         INTERNAL_DEFINE_FUNCTION,
         define_fn,
@@ -23,11 +24,11 @@ pub fn register_builtins(vm: &mut Vm) -> &mut Vm {
     .register_native_function(NativeFunction::with_arg_list("throw", throw_fn))
     .register_native_function(NativeFunction::with_args_1("val->string", val_to_string_fn))
     .register_native_function(NativeFunction::with_args_1("val->type", val_to_type_fn))
-    .register_native_function(NativeFunction::with_args_0("help", help_fn));
-    math::register(vm);
-    lists::register(vm);
-    structs::register(vm);
-    vm
+    .register_native_function(NativeFunction::with_args_0("help", help_fn))
+    .apply_mut(math::register)
+    .apply_mut(strings::register)
+    .apply_mut(lists::register)
+    .apply_mut(structs::register);
 }
 
 /// Defines a symbol in the global scope.

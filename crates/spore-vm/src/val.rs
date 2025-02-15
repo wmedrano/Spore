@@ -6,12 +6,13 @@ use custom::SporeCustom;
 use functions::{ByteCodeFunction, NativeFunction};
 use symbol::SymbolId;
 
-use crate::{object_store::ObjectId, vm::Vm, SporeList, SporeString, SporeStruct};
+use crate::{object_store::ObjectId, vm::Vm, SporeCustomType, SporeList, SporeString, SporeStruct};
 
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, Default, PartialEq)]
 /// Represents a value in the VM.
 pub enum Val {
     /// Represents the lack of a value.
+    #[default]
     Void,
     /// Represents a boolean value.
     Bool(bool),
@@ -70,6 +71,26 @@ impl Val {
     pub fn as_str(self, vm: &Vm) -> Option<&str> {
         match self {
             Val::String(string_id) => vm.objects.get_str(string_id),
+            _ => None,
+        }
+    }
+
+    pub fn as_custom<T: SporeCustomType>(self, vm: &Vm) -> Option<&T> {
+        match self {
+            Val::Custom(id) => {
+                let custom = vm.objects.get_custom(id)?;
+                custom.get().downcast_ref()
+            }
+            _ => None,
+        }
+    }
+
+    pub fn as_custom_mut<T: SporeCustomType>(self, vm: &mut Vm) -> Option<&mut T> {
+        match self {
+            Val::Custom(id) => {
+                let custom = vm.objects.get_custom_mut(id)?;
+                custom.get_mut().downcast_mut()
+            }
             _ => None,
         }
     }

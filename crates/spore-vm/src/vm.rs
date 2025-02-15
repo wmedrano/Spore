@@ -23,7 +23,7 @@ use crate::{
         symbol::SymbolId,
         Val,
     },
-    SporeRc, SporeString,
+    SporeCustomType, SporeRc, SporeString,
 };
 
 #[derive(Debug)]
@@ -80,6 +80,17 @@ impl Default for Vm {
 }
 
 impl Vm {
+    pub fn apply(self, f: impl Fn(&mut Vm)) -> Vm {
+        let mut vm = self;
+        vm.apply_mut(f);
+        vm
+    }
+
+    pub fn apply_mut(&mut self, f: impl Fn(&mut Vm)) -> &mut Vm {
+        f(self);
+        self
+    }
+
     /// Registers a native function in the VM.
     ///
     /// This function registers a native (Rust) function with the VM, making it callable
@@ -144,6 +155,11 @@ impl Vm {
 
     pub fn make_string(&mut self, s: impl Into<SporeString>) -> Val {
         Val::String(self.objects.register_string(s))
+    }
+
+    pub fn make_custom(&mut self, custom: impl SporeCustomType) -> Val {
+        let id = self.objects.register_custom(custom);
+        Val::Custom(id)
     }
 }
 

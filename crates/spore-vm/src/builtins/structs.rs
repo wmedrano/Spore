@@ -4,10 +4,10 @@ use crate::{
     SporeStruct,
 };
 
-pub fn register(vm: &mut Vm) -> &mut Vm {
+pub fn register(vm: &mut Vm) {
     vm.register_native_function(NativeFunction::new("struct", struct_fn))
         .register_native_function(NativeFunction::with_args_2("struct-get", struct_get_fn))
-        .register_native_function(NativeFunction::with_arg_3("struct-set!", struct_set_fn))
+        .register_native_function(NativeFunction::with_arg_3("struct-set!", struct_set_fn));
 }
 
 fn struct_fn(vm: &mut Vm) -> VmResult<Val> {

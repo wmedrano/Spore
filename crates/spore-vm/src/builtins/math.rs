@@ -3,10 +3,10 @@ use crate::{
     vm::{Vm, VmError, VmResult},
 };
 
-pub fn register(vm: &mut Vm) -> &mut Vm {
+pub fn register(vm: &mut Vm) {
     vm.register_native_function(NativeFunction::with_arg_list("+", plus_fn))
         .register_native_function(NativeFunction::with_arg_list("-", minus_fn))
-        .register_native_function(NativeFunction::with_arg_list("<", less_fn))
+        .register_native_function(NativeFunction::with_arg_list("<", less_fn));
 }
 
 /// Adds the given arguments.

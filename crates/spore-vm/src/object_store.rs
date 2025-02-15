@@ -10,7 +10,7 @@ use crate::{
         Val,
     },
     vm::StackFrame,
-    SporeList, SporeString, SporeStruct,
+    SporeCustomType, SporeList, SporeString, SporeStruct,
 };
 
 /// An identifier for an object in the object store.
@@ -185,6 +185,11 @@ impl Objects {
             .register(strct.into(), self.reachable_color.swap())
     }
 
+    pub fn register_custom(&mut self, custom: impl SporeCustomType) -> ObjectId<SporeCustom> {
+        let custom = SporeCustom::new(custom);
+        self.custom.register(custom, self.reachable_color.swap())
+    }
+
     pub fn get_str(&self, string_id: ObjectId<SporeString>) -> Option<&str> {
         self.strings.get(string_id).map(SporeString::as_str)
     }
@@ -195,6 +200,14 @@ impl Objects {
 
     pub fn get_struct(&self, struct_id: ObjectId<SporeStruct>) -> Option<&SporeStruct> {
         self.structs.get(struct_id)
+    }
+
+    pub fn get_custom(&self, custom_id: ObjectId<SporeCustom>) -> Option<&SporeCustom> {
+        self.custom.get(custom_id)
+    }
+
+    pub fn get_custom_mut(&mut self, custom_id: ObjectId<SporeCustom>) -> Option<&mut SporeCustom> {
+        self.custom.get_mut(custom_id)
     }
 
     /// Runs garbage collection.
