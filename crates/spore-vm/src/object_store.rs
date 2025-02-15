@@ -182,6 +182,10 @@ impl Objects {
             .register(strct.into(), self.reachable_color.swap())
     }
 
+    pub fn get_str(&self, string_id: ObjectId<SporeString>) -> Option<&str> {
+        self.strings.get(string_id).map(SporeString::as_str)
+    }
+
     pub fn get_list(&self, list_id: ObjectId<SporeList>) -> Option<&SporeList> {
         self.lists.get(list_id)
     }

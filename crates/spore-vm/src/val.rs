@@ -62,6 +62,13 @@ impl Val {
         matches!(self, Val::Void)
     }
 
+    pub fn as_str(self, vm: &Vm) -> Option<&str> {
+        match self {
+            Val::String(string_id) => vm.objects.get_str(string_id),
+            _ => None,
+        }
+    }
+
     pub fn as_list(self, vm: &Vm) -> Option<&SporeList> {
         match self {
             Val::List(object_id) => vm.objects.get_list(object_id),

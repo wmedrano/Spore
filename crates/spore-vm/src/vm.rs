@@ -101,6 +101,11 @@ impl Vm {
         self
     }
 
+    pub fn set_global(&mut self, symbol: SymbolId, value: Val) {
+        let globals = self.modules.get_mut(&self.common_symbols.global).unwrap();
+        globals.values.insert(symbol, value);
+    }
+
     /// Returns the arguments passed to the current function.
     ///
     /// This function returns a slice of `Val` representing the arguments passed to the
