@@ -1,6 +1,8 @@
+pub mod custom;
 pub mod functions;
 pub mod symbol;
 
+use custom::SporeCustom;
 use functions::{ByteCodeFunction, NativeFunction};
 use symbol::SymbolId;
 
@@ -29,6 +31,8 @@ pub enum Val {
     NativeFunction(ObjectId<NativeFunction>),
     /// Contains a bytecode function.
     BytecodeFunction(ObjectId<ByteCodeFunction>),
+    /// Contains a custom object.
+    Custom(ObjectId<SporeCustom>),
     /// Contains a datatype.
     DataType(DataType),
 }
@@ -45,6 +49,7 @@ pub enum DataType {
     StructT,
     Function,
     DataType,
+    Custom,
 }
 
 impl Val {
@@ -186,6 +191,10 @@ impl ValFormatter<'_> {
                     None => write!(f, "(fn-{})", object_id.as_num()),
                 }
             }
+            Val::Custom(object_id) => match self.vm.objects.custom.get(object_id) {
+                Some(obj) => write!(f, "(custom-object-{})", obj.name()),
+                None => write!(f, "(gc-custom-object)"),
+            },
             Val::DataType(dt) => match dt {
                 DataType::Void => write!(f, "(type-void)"),
                 DataType::Bool => write!(f, "(type-bool)"),
@@ -197,7 +206,18 @@ impl ValFormatter<'_> {
                 DataType::StructT => write!(f, "(type-struct)"),
                 DataType::Function => write!(f, "(type-function)"),
                 DataType::DataType => write!(f, "(type-type)"),
+                DataType::Custom => write!(f, "(type-custom)"),
             },
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn val_size_is_small() {
+        assert_eq!(std::mem::size_of::<Val>(), 2 * std::mem::size_of::<usize>());
     }
 }

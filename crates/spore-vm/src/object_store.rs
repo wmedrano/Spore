@@ -4,6 +4,7 @@ use crate::{
     instruction::Instruction,
     module::Module,
     val::{
+        custom::SporeCustom,
         functions::{ByteCodeFunction, NativeFunction},
         symbol::SymbolTable,
         Val,
@@ -157,6 +158,8 @@ pub struct Objects {
     pub native_functions: TypedObjectStore<NativeFunction>,
     /// The store for bytecode functions.
     pub bytecode_functions: TypedObjectStore<ByteCodeFunction>,
+    /// The store for custom objects.
+    pub custom: TypedObjectStore<SporeCustom>,
     /// The symbol table.
     pub symbols: SymbolTable,
     /// The null bytecode function.
@@ -287,6 +290,13 @@ impl Objects {
                     }
                 }
             }
+            Val::Custom(id) => {
+                if let Some(obj) = self.custom.maybe_color(id, self.reachable_color) {
+                    for val in obj.references() {
+                        queue.push(*val);
+                    }
+                }
+            }
             Val::Void
             | Val::Bool(_)
             | Val::Int(_)
@@ -318,5 +328,6 @@ impl Objects {
         self.structs.sweep_color(self.reachable_color);
         self.native_functions.sweep_color(self.reachable_color);
         self.bytecode_functions.sweep_color(self.reachable_color);
+        self.custom.sweep_color(self.reachable_color);
     }
 }

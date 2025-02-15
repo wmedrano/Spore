@@ -69,6 +69,7 @@ fn val_to_type_fn(_: &mut Vm, val: Val) -> VmResult<Val> {
         Val::Struct(_) => DataType::StructT,
         Val::NativeFunction(_) => DataType::Function,
         Val::BytecodeFunction(_) => DataType::Function,
+        Val::Custom(_) => DataType::Custom,
         Val::DataType(_) => DataType::DataType,
     };
     Ok(Val::DataType(t))

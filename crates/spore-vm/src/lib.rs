@@ -29,3 +29,23 @@ pub type SporeStruct = HashMap<SymbolId, Val>;
 
 /// The physical list representation.
 pub type SporeList = Vec<Val>;
+
+pub use val::custom::SporeCustomType;
+
+#[macro_export]
+macro_rules! register_spore_type {
+    ($typename:ty) => {
+        register_spore_type!($typename, &[])
+    };
+    ($typename:ty, $references:expr) => {
+        impl $crate::SporeCustomType for $typename {
+            fn spore_as_any<'a>(&'a self) -> &'a dyn Any {
+                self
+            }
+
+            fn spore_as_any_mut<'a>(&'a mut self) -> &'a mut dyn Any {
+                self
+            }
+        }
+    };
+}
