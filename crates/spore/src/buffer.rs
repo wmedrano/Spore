@@ -38,6 +38,15 @@ pub fn register_buffer(vm: &mut Vm) {
             Ok(Val::Void)
         },
     ))
+    .register_native_function(NativeFunction::with_args_2(
+        "buffer-delete!",
+        move |vm: &mut Vm, buffer: Val, pos: Val| {
+            let pos = pos.as_int().ok_or(VmError::WrongType)? as usize;
+            let buffer: &mut Buffer = buffer.as_custom_mut(vm).ok_or(VmError::WrongType)?;
+            buffer.text.remove(pos..pos + 1);
+            Ok(Val::Void)
+        },
+    ))
     .register_native_function(NativeFunction::with_args_1(
         "buffer->string",
         |vm: &mut Vm, buffer: Val| {

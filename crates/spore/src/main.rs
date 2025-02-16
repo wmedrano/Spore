@@ -45,10 +45,24 @@ fn run(vm: &mut Vm, mut terminal: DefaultTerminal) -> Result<(), Box<dyn std::er
 
 (define (handle-event! event)
   (if (= event "<esc>")
-    (define exit? true)
     (do
-      (buffer-insert! text cursor event)
-      (define cursor (+ cursor (string-len event))))))
+      (define exit? true)
+      (return)))
+  (if (= event "<backspace>")
+    (if (< 0 cursor)
+      (do
+        (define cursor (- cursor 1))
+        (buffer-delete! text cursor)
+        (return))))
+  (if (= event "<backspace>") (return))
+  (if (= event "<enter>")
+    (do
+      (buffer-insert! text cursor "")
+      (define cursor (+ cursor 1))
+      (return)))
+  (do
+    (buffer-insert! text cursor event)
+    (define cursor (+ cursor (string-len event)))))
 "#,
     )
     .unwrap();

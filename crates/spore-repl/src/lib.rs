@@ -40,6 +40,7 @@ impl Repl {
             match readline {
                 Ok(input) => {
                     input_buffer.push_str(&input);
+                    input_buffer.push('\n');
                     match Ast::with_source(&input_buffer) {
                         Err(AstError::UnclosedParen(_)) => {}
                         _ => {
@@ -96,7 +97,7 @@ impl Repl {
     fn show_ast(&self, input: &str, asts: &[Ast]) -> VmResult<String> {
         let mut res = Vec::with_capacity(asts.len());
         for ast in asts {
-            res.push(format!("{:#?}", AstPrinter::new(input, ast)));
+            res.push(format!("{:#?}", ast.with_text(input)));
         }
         Ok(res.join("\n"))
     }
@@ -116,27 +117,6 @@ impl Repl {
             self.expressions_count += 1;
         }
         Ok(res.join("\n"))
-    }
-}
-
-#[derive(Debug)]
-#[allow(dead_code)]
-enum AstPrinter<'a> {
-    Leaf(&'a str),
-    Tree(Vec<AstPrinter<'a>>),
-}
-
-impl<'a> AstPrinter<'a> {
-    fn new(source: &'a str, ast: &Ast) -> Self {
-        match ast {
-            Ast::Tree { children, .. } => AstPrinter::Tree(
-                children
-                    .iter()
-                    .map(|ast| AstPrinter::new(source, ast))
-                    .collect(),
-            ),
-            Ast::Leaf { span } => AstPrinter::Leaf(span.text(source)),
-        }
     }
 }
 

@@ -177,6 +177,10 @@ impl Compiler<'_> {
                 dst[condition_jump] = Instruction::JumpIf(false_end - false_start);
                 dst[jump] = Instruction::Jump(true_end - true_start);
             }
+            Ir::Return { expr } => {
+                self.compile(dst, expr);
+                dst.push(Instruction::Return);
+            }
         }
     }
 }

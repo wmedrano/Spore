@@ -56,6 +56,9 @@ pub fn tokenize(source: &str) -> impl '_ + Iterator<Item = Token> {
             '"' => {
                 return Some(parse_string(idx as u32, &mut source_iter));
             }
+            ';' => {
+                return Some(parse_comment(idx as u32, &mut source_iter));
+            }
             _ => return Some(parse_token(idx as u32, &mut source_iter)),
         }
     })
@@ -78,11 +81,10 @@ fn parse_string(start: u32, source_iter: &mut Peekable<CharIndices>) -> Token {
             }
             Some(x) => x,
         };
+        end = idx as u32;
         if idx as u32 == start {
             assert_eq!(ch, '"');
-        }
-        end = idx as u32;
-        if ch == '"' && idx as u32 != start {
+        } else if ch == '"' {
             return Token {
                 span: Span {
                     start,
@@ -133,6 +135,38 @@ fn parse_token(start: u32, source_iter: &mut Peekable<CharIndices>) -> Token {
     }
 }
 
+/// Parses a comment token from the source code.
+fn parse_comment(start: u32, source_iter: &mut Peekable<CharIndices>) -> Token {
+    let mut end = start;
+    loop {
+        let (idx, ch) = match source_iter.next() {
+            None => {
+                let span = Span {
+                    start,
+                    end: end + 1,
+                };
+                return Token {
+                    span,
+                    token_type: TokenType::Identifier,
+                };
+            }
+            Some(x) => x,
+        };
+        end = idx as u32;
+        if idx as u32 == start {
+            assert_eq!(ch, ';');
+        } else if ch == '\n' {
+            return Token {
+                span: Span {
+                    start,
+                    end: end + 1,
+                },
+                token_type: TokenType::Identifier,
+            };
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -177,6 +211,25 @@ mod tests {
                     }
                 )
             ]
+        );
+    }
+
+    #[test]
+    fn newline_in_strings_is_preservide() {
+        assert_eq!(
+            tokenize_to_vec(
+                r#"
+"multi line
+string"
+"#
+            ),
+            vec![(
+                "\"multi line\nstring\"",
+                Token {
+                    span: Span { start: 1, end: 20 },
+                    token_type: TokenType::Identifier
+                }
+            ),]
         );
     }
 
@@ -321,6 +374,69 @@ mod tests {
                     }
                 )
             ],
+        );
+    }
+
+    #[test]
+    fn comments_are_parsed_until_newline() {
+        assert_eq!(
+            tokenize_to_vec(
+                r#"
+(+ 2 2) ;; This should be equal to 4.
+;; This is a new "comment", unrelated to (+ 2 2)
+"#
+            ),
+            vec![
+                (
+                    "(",
+                    Token {
+                        span: Span { start: 1, end: 2 },
+                        token_type: TokenType::OpenParen
+                    }
+                ),
+                (
+                    "+",
+                    Token {
+                        span: Span { start: 2, end: 3 },
+                        token_type: TokenType::Identifier
+                    }
+                ),
+                (
+                    "2",
+                    Token {
+                        span: Span { start: 4, end: 5 },
+                        token_type: TokenType::Identifier
+                    }
+                ),
+                (
+                    "2",
+                    Token {
+                        span: Span { start: 6, end: 7 },
+                        token_type: TokenType::Identifier
+                    }
+                ),
+                (
+                    ")",
+                    Token {
+                        span: Span { start: 7, end: 8 },
+                        token_type: TokenType::CloseParen
+                    }
+                ),
+                (
+                    ";; This should be equal to 4.\n",
+                    Token {
+                        span: Span { start: 9, end: 39 },
+                        token_type: TokenType::Identifier
+                    }
+                ),
+                (
+                    ";; This is a new \"comment\", unrelated to (+ 2 2)\n",
+                    Token {
+                        span: Span { start: 39, end: 88 },
+                        token_type: TokenType::Identifier
+                    }
+                )
+            ]
         );
     }
 }

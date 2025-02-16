@@ -6,7 +6,8 @@ use crate::{
 pub fn register(vm: &mut Vm) {
     vm.register_native_function(NativeFunction::with_arg_list("+", plus_fn))
         .register_native_function(NativeFunction::with_arg_list("-", minus_fn))
-        .register_native_function(NativeFunction::with_arg_list("<", less_fn));
+        .register_native_function(NativeFunction::with_arg_list("<", less_fn))
+        .register_native_function(NativeFunction::with_arg_list(">", greater_fn));
 }
 
 /// Adds the given arguments.
@@ -44,19 +45,11 @@ fn minus_fn(vm: &Vm, args: &[Val]) -> VmResult<Val> {
     }
 }
 
-/// Returns `true` if the arguments are ordered from least to greatest.
-fn less_fn(_: &Vm, args: &[Val]) -> VmResult<Val> {
+fn is_ordered_impl(args: &[Val], cmp: impl Fn(Val, Val) -> VmResult<bool>) -> VmResult<Val> {
     for window in args.windows(2) {
         match window {
             [a, b] => {
-                let is_less = match (a, b) {
-                    (Val::Int(a), Val::Int(b)) => a < b,
-                    (Val::Float(a), Val::Float(b)) => a < b,
-                    (Val::Int(a), Val::Float(b)) => (*a as f64) < *b,
-                    (Val::Float(a), Val::Int(b)) => *a < (*b as f64),
-                    _ => return Err(VmError::WrongType),
-                };
-                if !is_less {
+                if !cmp(*a, *b)? {
                     return Ok(Val::Bool(false));
                 }
             }
@@ -64,6 +57,28 @@ fn less_fn(_: &Vm, args: &[Val]) -> VmResult<Val> {
         }
     }
     Ok(Val::Bool(true))
+}
+
+/// Returns `true` if the arguments are ordered from least to greatest.
+fn less_fn(_: &Vm, args: &[Val]) -> VmResult<Val> {
+    is_ordered_impl(args, |a, b| match (a, b) {
+        (Val::Int(a), Val::Int(b)) => Ok(a < b),
+        (Val::Float(a), Val::Float(b)) => Ok(a < b),
+        (Val::Int(a), Val::Float(b)) => Ok((a as f64) < b),
+        (Val::Float(a), Val::Int(b)) => Ok(a < (b as f64)),
+        _ => Err(VmError::WrongType),
+    })
+}
+
+/// Returns `true` if the arguments are ordered from greatest to least.
+fn greater_fn(_: &Vm, args: &[Val]) -> VmResult<Val> {
+    is_ordered_impl(args, |a, b| match (a, b) {
+        (Val::Int(a), Val::Int(b)) => Ok(a > b),
+        (Val::Float(a), Val::Float(b)) => Ok(a > b),
+        (Val::Int(a), Val::Float(b)) => Ok((a as f64) > b),
+        (Val::Float(a), Val::Int(b)) => Ok(a > (b as f64)),
+        _ => Err(VmError::WrongType),
+    })
 }
 
 #[cfg(test)]

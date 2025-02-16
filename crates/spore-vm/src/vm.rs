@@ -180,7 +180,7 @@ impl Vm {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 /// Represents errors that can occur during VM execution.
 pub enum VmError {
     Compile(CompileError),
@@ -221,7 +221,7 @@ impl std::fmt::Display for VmError {
 }
 
 impl VmError {
-    pub fn with_context<'a>(&'a self, vm: &'a Vm, source: &'a str) -> VmErrorWithContext<'a> {
+    pub fn with_context<'a>(self, vm: &'a Vm, source: &'a str) -> VmErrorWithContext<'a> {
         VmErrorWithContext {
             vm,
             err: self,
@@ -233,7 +233,7 @@ impl VmError {
 #[derive(Debug)]
 pub struct VmErrorWithContext<'a> {
     vm: &'a Vm,
-    err: &'a VmError,
+    err: VmError,
     source: &'a str,
 }
 
@@ -587,8 +587,14 @@ mod tests {
     #[test]
     fn recursive_function_call() {
         let mut vm = Vm::default();
+        let source = r#"
+;; fib(n) = fib(n-2) + fib(n-1)
+(define (fib n)
+  (if (< n 2) (return n))
+  (+ (fib (- n 2)) (fib (- n 1))))"#;
         assert_eq!(
-            vm.eval_str("(define (fib n) (if (< n 2) n (+ (fib (- n 2)) (fib (- n 1)))))")
+            vm.eval_str(source)
+                .map_err(|err| err.clone().with_context(&vm, source))
                 .unwrap(),
             Val::Void
         );

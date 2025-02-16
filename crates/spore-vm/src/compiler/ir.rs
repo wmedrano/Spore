@@ -30,6 +30,8 @@ pub enum Ir<'a> {
         true_branch: &'a Ir<'a>,
         false_branch: &'a Ir<'a>,
     },
+    /// An early return expression.
+    Return { expr: &'a Ir<'a> },
 }
 
 /// Represents a constant value.
@@ -50,6 +52,7 @@ pub enum Constant<'a> {
 }
 
 pub enum ParsedText<'a> {
+    Comment,
     Constant(Constant<'a>),
     Identifier(&'a str),
 }
@@ -70,6 +73,8 @@ impl<'a> ParsedText<'a> {
             if let Ok(x) = text.parse() {
                 return ParsedText::Constant(Constant::Float(x));
             }
+        } else if leading_char == ';' {
+            return ParsedText::Comment;
         }
         if text.starts_with('"') && text.ends_with('"') && text.len() > 1 {
             return ParsedText::Constant(Constant::String(&text[1..text.len() - 1]));
@@ -172,8 +177,13 @@ impl<'a> std::fmt::Display for IrErrorWithContext<'a> {
 impl<'a> Ir<'a> {
     /// Creates an IR from an AST.
     pub fn with_ast(source: &'a str, ast: &Ast, arena: &'a Bump) -> Result<Ir<'a>, IrError> {
-        let builder = IrBuilder { source, arena };
-        builder.build(ast)
+        match ast.with_stripped_comments(source) {
+            Some(stripped_ast) => {
+                let builder = IrBuilder { source, arena };
+                builder.build(&stripped_ast)
+            }
+            None => Ok(Ir::Constant(Constant::Void)),
+        }
     }
 }
 
@@ -186,59 +196,68 @@ impl<'a> IrBuilder<'a> {
     /// Builds an IR from an AST.
     fn build(&self, ast: &Ast) -> Result<Ir<'a>, IrError> {
         match ast {
-            Ast::Tree { span, children } => {
-                let leading_token = children.first().and_then(|ast| match ast {
-                    Ast::Tree { .. } => None,
-                    Ast::Leaf { span } => {
-                        let parsed = ParsedText::new(span.text(self.source));
-                        Some((*span, parsed))
-                    }
-                });
-                match leading_token {
-                    Some((span, ParsedText::Constant(_))) => {
-                        Err(IrError::ConstantNotCallable(span))
-                    }
-                    Some((_, ParsedText::Identifier("define"))) => match children.as_slice() {
-                        [_define, symbol @ Ast::Leaf { .. }, expr] => {
-                            self.build_define(symbol, expr)
-                        }
-                        [_define, Ast::Tree { span, children }, exprs @ ..] => {
-                            match children.split_first() {
-                                Some((name, args)) => self.build_define_function(name, args, exprs),
-                                None => Err(IrError::BadDefine(*span)),
-                            }
-                        }
-                        _ => Err(IrError::BadDefine(*span)),
-                    },
-                    Some((_, ParsedText::Identifier("lambda"))) => match children.as_slice() {
-                        [_lambda, args, exprs @ ..] => match args {
-                            Ast::Tree { children, .. } => self.build_lambda(None, children, exprs),
-                            Ast::Leaf { span } => Err(IrError::BadLambda(*span)),
-                        },
-                        _ => Err(IrError::BadLambda(*span)),
-                    },
-                    Some((_, ParsedText::Identifier("if"))) => match children.as_slice() {
-                        [_if, pred, true_branch, false_branch] => {
-                            self.build_if(pred, true_branch, Some(false_branch))
-                        }
-                        [_if, pred, true_branch] => self.build_if(pred, true_branch, None),
-                        _ => Err(IrError::BadLambda(*span)),
-                    },
-                    _ => {
-                        let span = *span;
-                        let text = span.text(self.source);
-                        match text {
-                            "define" | "lambda" => Err(IrError::BadDefine(span)),
-                            "if" => Err(IrError::BadIf(span)),
-                            _ => self.build_function_call(span, children.as_slice()),
-                        }
+            Ast::Leaf { span } => self.build_leaf(*span),
+            Ast::Tree { span, children } => self.build_tree(*span, children),
+        }
+    }
+
+    /// Builds an IR from an AST.
+    fn build_tree(&self, span: Span, children: &[Ast]) -> Result<Ir<'a>, IrError> {
+        let leading_token = children.first().and_then(|ast| match ast {
+            Ast::Tree { .. } => None,
+            Ast::Leaf { span } => {
+                let parsed = ParsedText::new(span.text(self.source));
+                Some((*span, parsed))
+            }
+        });
+        match leading_token {
+            Some((span, ParsedText::Constant(_))) => Err(IrError::ConstantNotCallable(span)),
+            Some((_, ParsedText::Identifier("define"))) => match children {
+                [_define, symbol @ Ast::Leaf { .. }, expr] => self.build_define(symbol, expr),
+                [_define, Ast::Tree { span, children }, exprs @ ..] => {
+                    match children.split_first() {
+                        Some((name, args)) => self.build_define_function(name, args, exprs),
+                        None => Err(IrError::BadDefine(*span)),
                     }
                 }
-            }
-            Ast::Leaf { span } => match ParsedText::new(span.text(self.source)) {
-                ParsedText::Constant(c) => Ok(Ir::Constant(c)),
-                ParsedText::Identifier(ident) => Ok(Ir::Deref(ident)),
+                _ => Err(IrError::BadDefine(span)),
             },
+            Some((_, ParsedText::Identifier("lambda"))) => match children {
+                [_lambda, args, exprs @ ..] => match args {
+                    Ast::Tree { children, .. } => self.build_lambda(None, children, exprs),
+                    Ast::Leaf { span } => Err(IrError::BadLambda(*span)),
+                },
+                _ => Err(IrError::BadLambda(span)),
+            },
+            Some((_, ParsedText::Identifier("if"))) => match children {
+                [_if, pred, true_branch, false_branch] => {
+                    self.build_if(pred, true_branch, Some(false_branch))
+                }
+                [_if, pred, true_branch] => self.build_if(pred, true_branch, None),
+                _ => Err(IrError::BadLambda(span)),
+            },
+            Some((_, ParsedText::Identifier("return"))) => match children {
+                [_return] => self.build_return(None),
+                [_return, expr] => self.build_return(Some(expr)),
+                _ => Err(IrError::BadLambda(span)),
+            },
+            _ => {
+                let text = span.text(self.source);
+                match text {
+                    "define" | "lambda" => Err(IrError::BadDefine(span)),
+                    "if" => Err(IrError::BadIf(span)),
+                    _ => self.build_function_call(span, children),
+                }
+            }
+        }
+    }
+
+    /// Builds an IR from an AST.
+    fn build_leaf(&self, leaf_span: Span) -> Result<Ir<'a>, IrError> {
+        match ParsedText::new(leaf_span.text(self.source)) {
+            ParsedText::Comment => todo!("comments not supported as value"),
+            ParsedText::Constant(c) => Ok(Ir::Constant(c)),
+            ParsedText::Identifier(ident) => Ok(Ir::Deref(ident)),
         }
     }
 
@@ -271,6 +290,7 @@ impl<'a> IrBuilder<'a> {
         for arg in args {
             match arg {
                 Ast::Leaf { span } => match ParsedText::new(span.text(self.source)) {
+                    ParsedText::Comment => todo!("comments not supported as lambda argument"),
                     ParsedText::Identifier(ident) => parsed_args.push(ident),
                     ParsedText::Constant(_) => return Err(IrError::BadLambda(arg.span())), // Constants are not allowed as arguments
                 },
@@ -294,6 +314,7 @@ impl<'a> IrBuilder<'a> {
             .leaf_text(self.source)
             .ok_or_else(|| IrError::DefineExpectedSymbol(symbol.span()))?;
         let symbol_text = match ParsedText::new(symbol_text) {
+            ParsedText::Comment => todo!("comments not supported in define"),
             ParsedText::Constant(_) => {
                 return Err(IrError::DefineExpectedIdentifierButFoundConstant(
                     symbol.span(),
@@ -319,6 +340,9 @@ impl<'a> IrBuilder<'a> {
             .leaf_text(self.source)
             .ok_or_else(|| IrError::DefineExpectedSymbol(name.span()))?;
         let symbol_text = match ParsedText::new(symbol_text) {
+            ParsedText::Comment => {
+                todo!("comments not supported in define function syntax")
+            }
             ParsedText::Constant(_) => {
                 return Err(IrError::DefineExpectedIdentifierButFoundConstant(
                     name.span(),
@@ -351,6 +375,19 @@ impl<'a> IrBuilder<'a> {
             true_branch,
             false_branch,
         })
+    }
+
+    /// Builds a return Ir.
+    fn build_return(&self, expr: Option<&Ast>) -> Result<Ir<'a>, IrError> {
+        match expr {
+            Some(expr) => {
+                let expr = self.arena.alloc(self.build(expr)?);
+                Ok(Ir::Return { expr })
+            }
+            None => Ok(Ir::Return {
+                expr: &Ir::Constant(Constant::Void),
+            }),
+        }
     }
 }
 
@@ -456,6 +493,34 @@ mod tests {
                     args: &[],
                     exprs: &[Ir::Constant(Constant::Int(1))]
                 }
+            }
+        );
+    }
+
+    #[test]
+    fn comments_are_ignored() {
+        let arena = Bump::new();
+        let source = r#"
+(do
+  ;; This is a function call.
+  (+ 1 2 3 4) ;; It adds all the numbers.
+)
+"#;
+        let ast = Ast::with_source(source).unwrap()[0].clone();
+        let ir = Ir::with_ast(source, &ast, &arena).unwrap();
+        assert_eq!(
+            ir,
+            Ir::FunctionCall {
+                function: &Ir::Deref("do"),
+                args: &[Ir::FunctionCall {
+                    function: &Ir::Deref("+"),
+                    args: &[
+                        Ir::Constant(Constant::Int(1)),
+                        Ir::Constant(Constant::Int(2)),
+                        Ir::Constant(Constant::Int(3)),
+                        Ir::Constant(Constant::Int(4))
+                    ]
+                }]
             }
         );
     }

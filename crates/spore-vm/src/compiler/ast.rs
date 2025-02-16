@@ -12,62 +12,56 @@ pub enum Ast {
     Leaf { span: Span },
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-/// Represents an error that can occur during AST building.
-pub enum AstError {
-    /// Represents an unclosed parenthesis.
-    UnclosedParen(Span),
-    /// Represents an unexpected close parenthesis.
-    UnexpectedCloseParen(Span),
-}
-
-impl std::error::Error for AstError {}
-
-impl std::fmt::Display for AstError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Ast {
+    /// Returns the span of the AST.
+    pub fn span(&self) -> Span {
         match self {
-            AstError::UnclosedParen(span) => {
-                write!(f, "unclosed parenthesis encountered at {span}")
-            }
-            AstError::UnexpectedCloseParen(span) => {
-                write!(f, "found unexpected close parenthesis at {span}")
+            Ast::Leaf { span } => *span,
+            Ast::Tree { span, .. } => *span,
+        }
+    }
+
+    /// Returns the text of the leaf node or `None` if `self` is not a leaf node.
+    pub fn leaf_text<'a>(&self, source: &'a str) -> Option<&'a str> {
+        match self {
+            Ast::Leaf { span } => Some(span.text(source)),
+            _ => None,
+        }
+    }
+
+    pub fn is_leaf(&self) -> bool {
+        matches!(self, Ast::Leaf { .. })
+    }
+
+    pub fn is_tree(&self) -> bool {
+        matches!(self, Ast::Tree { .. })
+    }
+
+    pub fn with_stripped_comments(&self, source: &str) -> Option<Ast> {
+        match self {
+            Ast::Tree { span, children } => Some(Ast::Tree {
+                span: *span,
+                children: children
+                    .iter()
+                    .filter(|ast| match ast {
+                        Ast::Tree { .. } => true,
+                        Ast::Leaf { span } => !span.text(source).starts_with(';'),
+                    })
+                    .cloned()
+                    .collect(),
+            }),
+            Ast::Leaf { span } => {
+                if span.text(source).starts_with(';') {
+                    None
+                } else {
+                    Some(Ast::Leaf { span: *span })
+                }
             }
         }
     }
-}
 
-impl AstError {
-    pub fn with_context<'a>(self, source: &'a str) -> AstErrorWithContext<'a> {
-        AstErrorWithContext { err: self, source }
-    }
-}
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub struct AstErrorWithContext<'a> {
-    err: AstError,
-    source: &'a str,
-}
-
-impl<'a> std::error::Error for AstErrorWithContext<'a> {}
-
-impl<'a> std::fmt::Display for AstErrorWithContext<'a> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self.err {
-            AstError::UnclosedParen(span) => {
-                write!(
-                    f,
-                    "unclosed parenthesis encountered at {span}: {text}",
-                    text = span.text(self.source)
-                )
-            }
-            AstError::UnexpectedCloseParen(span) => {
-                write!(
-                    f,
-                    "found unexpected close parenthesis at {span}: {text}",
-                    text = span.text(self.source)
-                )
-            }
-        }
+    pub fn with_text<'a>(&self, source: &'a str) -> AstWithText<'a> {
+        AstWithText::new(source, self)
     }
 }
 
@@ -134,20 +128,81 @@ impl Ast {
     }
 }
 
-impl Ast {
-    /// Returns the span of the AST.
-    pub fn span(&self) -> Span {
-        match self {
-            Ast::Leaf { span } => *span,
-            Ast::Tree { span, .. } => *span,
+#[derive(Debug)]
+pub enum AstWithText<'a> {
+    Leaf(&'a str),
+    Tree(Vec<AstWithText<'a>>),
+}
+
+impl<'a> AstWithText<'a> {
+    pub fn new(source: &'a str, ast: &Ast) -> Self {
+        match ast {
+            Ast::Tree { children, .. } => AstWithText::Tree(
+                children
+                    .iter()
+                    .map(|ast| AstWithText::new(source, ast))
+                    .collect(),
+            ),
+            Ast::Leaf { span } => AstWithText::Leaf(span.text(source)),
         }
     }
+}
 
-    /// Returns the text of the leaf node or `None` if `self` is not a leaf node.
-    pub fn leaf_text<'a>(&self, source: &'a str) -> Option<&'a str> {
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+/// Represents an error that can occur during AST building.
+pub enum AstError {
+    /// Represents an unclosed parenthesis.
+    UnclosedParen(Span),
+    /// Represents an unexpected close parenthesis.
+    UnexpectedCloseParen(Span),
+}
+
+impl std::error::Error for AstError {}
+
+impl std::fmt::Display for AstError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Ast::Leaf { span } => Some(span.text(source)),
-            _ => None,
+            AstError::UnclosedParen(span) => {
+                write!(f, "unclosed parenthesis encountered at {span}")
+            }
+            AstError::UnexpectedCloseParen(span) => {
+                write!(f, "found unexpected close parenthesis at {span}")
+            }
+        }
+    }
+}
+
+impl AstError {
+    pub fn with_context<'a>(self, source: &'a str) -> AstErrorWithContext<'a> {
+        AstErrorWithContext { err: self, source }
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct AstErrorWithContext<'a> {
+    err: AstError,
+    source: &'a str,
+}
+
+impl<'a> std::error::Error for AstErrorWithContext<'a> {}
+
+impl<'a> std::fmt::Display for AstErrorWithContext<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.err {
+            AstError::UnclosedParen(span) => {
+                write!(
+                    f,
+                    "unclosed parenthesis encountered at {span}: {text}",
+                    text = span.text(self.source)
+                )
+            }
+            AstError::UnexpectedCloseParen(span) => {
+                write!(
+                    f,
+                    "found unexpected close parenthesis at {span}: {text}",
+                    text = span.text(self.source)
+                )
+            }
         }
     }
 }
