@@ -42,13 +42,21 @@ impl Repl {
                     input_buffer.push_str(&input);
                     match Ast::with_source(&input_buffer) {
                         Err(AstError::UnclosedParen(_)) => {}
-                        _ => match self.execute_to_string(&input_buffer) {
-                            Ok(out) => println!("{out}"),
-                            Err(err) => match err {
-                                VmError::InterpreterBug(_) => return Err(err),
-                                err => println!("Error: {err}"),
-                            },
-                        },
+                        _ => {
+                            let res = self.execute_to_string(&input_buffer);
+                            input_buffer.clear();
+                            match res {
+                                Ok(out) => {
+                                    if !out.is_empty() {
+                                        println!("{out}")
+                                    }
+                                }
+                                Err(err) => match err {
+                                    VmError::InterpreterBug(_) => return Err(err),
+                                    err => println!("Error: {err}"),
+                                },
+                            }
+                        }
                     };
                 }
                 Err(ReadlineError::Interrupted) => {
