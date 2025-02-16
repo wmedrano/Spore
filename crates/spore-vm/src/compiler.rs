@@ -16,7 +16,7 @@ mod ir;
 pub mod span;
 pub mod tokenizer;
 
-#[derive(Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 /// Represents an error that can occur during compilation.
 pub enum CompileError {
     Ast(AstError),
@@ -36,6 +36,29 @@ impl std::fmt::Display for CompileError {
         match self {
             CompileError::Ast(e) => write!(f, "{e}"),
             CompileError::Ir(e) => write!(f, "{e}"),
+        }
+    }
+}
+
+impl CompileError {
+    pub fn with_context<'a>(self, source: &'a str) -> CompileErrorWithContext<'a> {
+        CompileErrorWithContext { err: self, source }
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub struct CompileErrorWithContext<'a> {
+    err: CompileError,
+    source: &'a str,
+}
+
+impl<'a> std::error::Error for CompileErrorWithContext<'a> {}
+
+impl<'a> std::fmt::Display for CompileErrorWithContext<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.err {
+            CompileError::Ast(e) => write!(f, "{}", e.with_context(self.source)),
+            CompileError::Ir(e) => write!(f, "{}", e.with_context(self.source)),
         }
     }
 }
@@ -85,7 +108,7 @@ impl Compiler<'_> {
                     Constant::Bool(x) => Val::Bool(*x),
                     Constant::Int(x) => Val::Int(*x),
                     Constant::Float(x) => Val::Float(*x),
-                    Constant::Symbol(x) => Val::Symbol(self.vm.objects.symbols.symbol_id(x)),
+                    Constant::Symbol(x) => Val::Symbol(self.vm.objects.symbols.make_symbol_id(x)),
                     // TODO: x should be parsed for escape sequences.
                     Constant::String(x) => self.vm.make_string(*x),
                 };
@@ -94,7 +117,7 @@ impl Compiler<'_> {
             Ir::Deref(ident) => {
                 let instruction = match self.deref_idx(ident) {
                     Some(idx) => Instruction::Get(idx),
-                    None => Instruction::Deref(self.vm.objects.symbols.symbol_id(ident)),
+                    None => Instruction::Deref(self.vm.objects.symbols.make_symbol_id(ident)),
                 };
                 dst.push(instruction);
             }
@@ -110,10 +133,10 @@ impl Compiler<'_> {
                     self.vm
                         .objects
                         .symbols
-                        .symbol_id(builtins::INTERNAL_DEFINE_FUNCTION),
+                        .make_symbol_id(builtins::INTERNAL_DEFINE_FUNCTION),
                 ));
                 dst.push(Instruction::Push(Val::Symbol(
-                    self.vm.objects.symbols.symbol_id(symbol),
+                    self.vm.objects.symbols.make_symbol_id(symbol),
                 )));
                 self.compile(dst, expr);
                 dst.push(Instruction::Eval(3));

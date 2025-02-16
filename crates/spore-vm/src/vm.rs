@@ -1,13 +1,5 @@
-use std::collections::HashMap;
-
 use bumpalo::Bump;
 use compact_str::CompactString;
-
-#[derive(Debug, PartialEq, Copy, Clone)]
-pub struct CommonSymbols {
-    /// '%global
-    pub(crate) global: SymbolId,
-}
 
 use crate::{
     builtins::register_builtins,
@@ -31,8 +23,7 @@ use crate::{
 ///
 /// The Vm struct represents the virtual machine that executes bytecode.
 pub struct Vm {
-    pub(crate) common_symbols: CommonSymbols,
-    pub(crate) modules: HashMap<SymbolId, Module>,
+    pub(crate) globals: Module,
     stack: Vec<Val>,
     stack_frame: StackFrame,
     previous_stack_frames: Vec<StackFrame>,
@@ -61,19 +52,13 @@ impl StackFrame {
 
 impl Default for Vm {
     fn default() -> Vm {
-        let mut objects = Objects::default();
-        let common_symbols = CommonSymbols {
-            global: objects.symbols.symbol_id("%global"),
-        };
         let mut vm = Vm {
-            common_symbols,
-            modules: HashMap::new(),
+            globals: Module::new(),
             stack: Vec::with_capacity(4096),
             stack_frame: StackFrame::default(),
             previous_stack_frames: Vec::with_capacity(64),
-            objects,
+            objects: Objects::default(),
         };
-        vm.modules.insert(vm.common_symbols.global, Module::new());
         register_builtins(&mut vm);
         vm
     }
@@ -81,7 +66,7 @@ impl Default for Vm {
 
 impl Vm {
     /// Apply `f` to `self` and return the value.
-    pub fn with_applied(self, f: impl Fn(&mut Vm)) -> Vm {
+    pub fn with(self, f: impl Fn(&mut Vm)) -> Vm {
         let mut vm = self;
         vm.apply_mut(f);
         vm
@@ -99,10 +84,9 @@ impl Vm {
     /// from spore code. It checks for name conflicts and adds the function to the
     /// global module.
     pub fn register_native_function(&mut self, f: NativeFunction) -> &mut Self {
-        let symbol = self.objects.symbols.symbol_id(f.name());
-        let globals = self.modules.get_mut(&self.common_symbols.global).unwrap();
+        let symbol = self.objects.symbols.make_symbol_id(f.name());
         assert!(
-            !globals.values.contains_key(&symbol),
+            !self.globals.values.contains_key(&symbol),
             "register_function called with existing function named {name}.",
             name = f.name()
         );
@@ -110,27 +94,30 @@ impl Vm {
             .objects
             .native_functions
             .register(f, self.objects.reachable_color.swap());
-        globals.values.insert(symbol, Val::NativeFunction(id));
+        self.globals.values.insert(symbol, Val::NativeFunction(id));
         self
     }
 
     /// Set a global value.
     pub fn set_global(&mut self, symbol: SymbolId, value: Val) {
-        let globals = self.modules.get_mut(&self.common_symbols.global).unwrap();
-        globals.values.insert(symbol, value);
+        self.globals.values.insert(symbol, value);
     }
 
     /// Set a global value.
     pub fn set_global_by_name(&mut self, name: &str, value: Val) {
         let symbol = self.make_symbol_id(name);
-        let globals = self.modules.get_mut(&self.common_symbols.global).unwrap();
-        globals.values.insert(symbol, value);
+        self.globals.values.insert(symbol, value);
     }
 
     /// Get a global value or `None` if it does not exist.
     pub fn get_global(&self, symbol: SymbolId) -> Option<Val> {
-        let globals = self.modules.get(&self.common_symbols.global).unwrap();
-        globals.values.get(&symbol).copied()
+        self.globals.values.get(&symbol).copied()
+    }
+
+    /// Get a global value by name or `None` if it does not exist.
+    pub fn get_global_by_name(&self, name: &str) -> Option<Val> {
+        let symbol = self.objects.symbols.symbol_id(name)?;
+        self.get_global(symbol)
     }
 
     /// Returns the arguments passed to the current function.
@@ -154,7 +141,7 @@ impl Vm {
 
     /// Make a new symbol and return it as a symbol id.
     pub fn make_symbol_id(&mut self, name: &str) -> SymbolId {
-        self.objects.symbols.symbol_id(name)
+        self.objects.symbols.make_symbol_id(name)
     }
 
     /// Make a new symbol and return it as a `Val`.
@@ -194,7 +181,8 @@ pub enum VmError {
     },
     Custom(CompactString),
     Format(std::fmt::Error),
-    /// Something unexpected happened with the interpreter. This is an issue with Spore itself and not the executed code.
+    /// Something unexpected happened with the interpreter. This is an issue with Spore itself and
+    /// not the executed code.
     InterpreterBug(CompactString),
 }
 
@@ -216,6 +204,56 @@ impl std::fmt::Display for VmError {
             VmError::Custom(e) => write!(f, "custom error encountered, {e}"),
             VmError::Format(error) => write!(f, "{error}"),
             VmError::InterpreterBug(b) => write!(f, "{b}"),
+        }
+    }
+}
+
+impl VmError {
+    pub fn with_context<'a>(&'a self, vm: &'a Vm, source: &'a str) -> VmErrorWithContext<'a> {
+        VmErrorWithContext {
+            vm,
+            err: self,
+            source,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct VmErrorWithContext<'a> {
+    vm: &'a Vm,
+    err: &'a VmError,
+    source: &'a str,
+}
+
+impl<'a> std::error::Error for VmErrorWithContext<'a> {}
+
+impl<'a> std::fmt::Display for VmErrorWithContext<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self.err {
+            VmError::Compile(err) => {
+                write!(f, "{}", err.with_context(self.source))
+            }
+            VmError::SymbolNotFound(symbol_id) => match self.vm.symbol_name(*symbol_id) {
+                Some(sym) => write!(f, "symbol {sym} not found"),
+                None => write!(f, "{}", self.err),
+            },
+            VmError::NotCallable(val) => write!(
+                f,
+                "Value of type {tp:?} is not callable: {val}",
+                tp = val.spore_type(),
+                val = val.formatted(self.vm)
+            ),
+            VmError::WrongType => write!(f, "wrong type encountered"),
+            VmError::WrongArity { expected, actual } => write!(
+                f,
+                "wrong arity, expected {expected} args, but got {actual} args."
+            ),
+            VmError::Custom(e) => write!(f, "custom error encountered, {e}"),
+            VmError::Format(error) => write!(f, "format error: {error}"),
+            VmError::InterpreterBug(b) => write!(
+                f,
+                "Something unexpected happened with the interpretter: {b}"
+            ),
         }
     }
 }
@@ -264,7 +302,7 @@ impl Vm {
             self.previous_stack_frames
                 .iter()
                 .chain(std::iter::once(&self.stack_frame)),
-            self.modules.values(),
+            std::iter::once(&self.globals),
         );
         self.stack.clear();
         let bytecode = ByteCodeFunction::new(self, s, ast, &Bump::new())?;
@@ -323,13 +361,7 @@ impl Vm {
                 self.stack.push(v);
             }
             Instruction::Deref(symbol) => {
-                let v = match self
-                    .modules
-                    .get_mut(&self.common_symbols.global)
-                    .unwrap()
-                    .values
-                    .get(symbol)
-                {
+                let v = match self.globals.values.get(symbol) {
                     Some(v) => *v,
                     None => return Err(VmError::SymbolNotFound(*symbol)),
                 };

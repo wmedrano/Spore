@@ -36,6 +36,41 @@ impl std::fmt::Display for AstError {
     }
 }
 
+impl AstError {
+    pub fn with_context<'a>(self, source: &'a str) -> AstErrorWithContext<'a> {
+        AstErrorWithContext { err: self, source }
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct AstErrorWithContext<'a> {
+    err: AstError,
+    source: &'a str,
+}
+
+impl<'a> std::error::Error for AstErrorWithContext<'a> {}
+
+impl<'a> std::fmt::Display for AstErrorWithContext<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.err {
+            AstError::UnclosedParen(span) => {
+                write!(
+                    f,
+                    "unclosed parenthesis encountered at {span}: {text}",
+                    text = span.text(self.source)
+                )
+            }
+            AstError::UnexpectedCloseParen(span) => {
+                write!(
+                    f,
+                    "found unexpected close parenthesis at {span}: {text}",
+                    text = span.text(self.source)
+                )
+            }
+        }
+    }
+}
+
 impl Ast {
     /// Creates a vector of ASTs from a source string.
     pub fn with_source(source: &str) -> Result<Vec<Self>, AstError> {

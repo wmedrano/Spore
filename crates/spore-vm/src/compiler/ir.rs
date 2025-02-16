@@ -81,7 +81,7 @@ impl<'a> ParsedText<'a> {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 /// Represents an error that can occur during IR building.
 pub enum IrError {
     EmptyFunctionCall(Span),
@@ -107,6 +107,64 @@ impl std::fmt::Display for IrError {
                 write!(f, "define expected identifier but found constant at {span}")
             }
             IrError::DefineExpectedSymbol(span) => write!(f, "define expected symbol at {span}"),
+        }
+    }
+}
+
+impl IrError {
+    pub fn with_context<'a>(self, source: &'a str) -> IrErrorWithContext<'a> {
+        IrErrorWithContext { err: self, source }
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub struct IrErrorWithContext<'a> {
+    err: IrError,
+    source: &'a str,
+}
+
+impl<'a> std::error::Error for IrErrorWithContext<'a> {}
+
+impl<'a> std::fmt::Display for IrErrorWithContext<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.err {
+            IrError::EmptyFunctionCall(span) => write!(
+                f,
+                "empty function call at {span}: {text}",
+                text = span.text(self.source)
+            ),
+            IrError::ConstantNotCallable(span) => {
+                write!(
+                    f,
+                    "constant not callable at {span}: {text}, text=span.text(self.source)",
+                    text = span.text(self.source),
+                )
+            }
+            IrError::BadDefine(span) => write!(
+                f,
+                "bad define at {span}: {text}",
+                text = span.text(self.source)
+            ),
+            IrError::BadLambda(span) => write!(
+                f,
+                "bad lambda at {span}: {text}",
+                text = span.text(self.source)
+            ),
+            IrError::BadIf(span) => {
+                write!(f, "bad if at {span}: {text}", text = span.text(self.source))
+            }
+            IrError::DefineExpectedIdentifierButFoundConstant(span) => {
+                write!(
+                    f,
+                    "define expected identifier but found constant at {span}: {text}",
+                    text = span.text(self.source)
+                )
+            }
+            IrError::DefineExpectedSymbol(span) => write!(
+                f,
+                "define expected symbol at {span}: {text}",
+                text = span.text(self.source)
+            ),
         }
     }
 }

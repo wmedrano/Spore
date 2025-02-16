@@ -44,7 +44,7 @@ impl Repl {
                         Err(AstError::UnclosedParen(_)) => {}
                         _ => {
                             let res = self.execute_to_string(&input_buffer);
-                            input_buffer.clear();
+                            let input_text = std::mem::take(&mut input_buffer);
                             match res {
                                 Ok(out) => {
                                     if !out.is_empty() {
@@ -53,7 +53,12 @@ impl Repl {
                                 }
                                 Err(err) => match err {
                                     VmError::InterpreterBug(_) => return Err(err),
-                                    err => println!("Error: {err}"),
+                                    err => {
+                                        println!(
+                                            "Error: {}",
+                                            err.with_context(&self.vm, &input_text)
+                                        )
+                                    }
                                 },
                             }
                         }

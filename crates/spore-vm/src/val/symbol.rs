@@ -23,7 +23,7 @@ pub struct SymbolTable {
 
 impl SymbolTable {
     /// Returns the symbol ID for a given name, creating a new one if it doesn't exist.
-    pub fn symbol_id(&mut self, name: &str) -> SymbolId {
+    pub fn make_symbol_id(&mut self, name: &str) -> SymbolId {
         match self.name_to_id.get(name) {
             Some(id) => *id,
             None => {
@@ -34,6 +34,11 @@ impl SymbolTable {
                 id
             }
         }
+    }
+
+    /// Returns the symbol ID for a given name or `None` if it doesn't exist.
+    pub fn symbol_id(&self, name: &str) -> Option<SymbolId> {
+        self.name_to_id.get(name).copied()
     }
 
     /// Returns the name for a given symbol ID.

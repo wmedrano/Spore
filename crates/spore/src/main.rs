@@ -8,7 +8,7 @@ mod events;
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
-    #[arg(value_enum, short, long)]
+    #[arg(value_enum, short, long, default_value = "editor")]
     pub mode: Mode,
 }
 
@@ -21,7 +21,7 @@ pub enum Mode {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
-    let mut vm = Vm::default().with_applied(buffer::register_buffer);
+    let mut vm = Vm::default().with(buffer::register_buffer);
     match args.mode {
         Mode::Editor => {
             let terminal = ratatui::init();
@@ -49,8 +49,11 @@ fn run(vm: &mut Vm, mut terminal: DefaultTerminal) -> Result<(), Box<dyn std::er
 "#,
     )
     .unwrap();
-    let exit_sym = vm.make_symbol_id("exit?");
-    while !vm.get_global(exit_sym).unwrap_or_default().is_truthy() {
+    while !vm
+        .get_global_by_name("exit?")
+        .unwrap_or_default()
+        .is_truthy()
+    {
         let text_val = vm.eval_str("(buffer->string text)").unwrap();
         let text = text_val.as_str(&vm).unwrap();
         terminal.draw(|frame: &mut Frame| frame.render_widget(text, frame.area()))?;
@@ -60,11 +63,10 @@ fn run(vm: &mut Vm, mut terminal: DefaultTerminal) -> Result<(), Box<dyn std::er
 }
 
 fn handle_events(vm: &mut Vm) {
-    let sym = vm.make_symbol_id("tmp-event");
-    vm.set_global(sym, Val::Void);
+    vm.set_global_by_name("tmp-event", Val::Void);
     for event in events::events() {
         let s = vm.make_string(event.clone());
-        vm.set_global(sym, s);
+        vm.set_global_by_name("tmp-event", s);
         vm.eval_str("(handle-event! tmp-event)").unwrap();
     }
 }

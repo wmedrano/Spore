@@ -149,6 +149,24 @@ impl Val {
             _ => None,
         }
     }
+
+    pub fn spore_type(self) -> DataType {
+        match self {
+            Val::Void => DataType::Void,
+            Val::Bool(_) => DataType::Bool,
+            Val::Int(_) => DataType::Int,
+            Val::Float(_) => DataType::Float,
+            Val::Symbol(_) => DataType::Symbol,
+            Val::String(_) => DataType::String,
+            Val::ShortString(_) => DataType::String,
+            Val::List(_) => DataType::List,
+            Val::Struct(_) => DataType::StructT,
+            Val::NativeFunction(_) => DataType::Function,
+            Val::BytecodeFunction(_) => DataType::Function,
+            Val::Custom(_) => DataType::Custom,
+            Val::DataType(_) => DataType::DataType,
+        }
+    }
 }
 
 /// A formatter for values that uses the VM to resolve symbols.
