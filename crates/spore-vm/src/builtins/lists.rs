@@ -11,8 +11,7 @@ pub fn register(vm: &mut Vm) {
 
 fn list_fn(vm: &mut Vm) -> VmResult<Val> {
     let args = vm.args().to_vec();
-    let lst = vm.objects.register_list(args);
-    Ok(Val::List(lst))
+    Ok(vm.make_list(args))
 }
 
 fn list_len_fn(vm: &mut Vm, lst: Val) -> VmResult<Val> {

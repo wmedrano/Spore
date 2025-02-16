@@ -95,7 +95,7 @@ impl NativeFunction {
     }
 
     /// Creates a new native function that takes three arguments.
-    pub fn with_arg_3<F: 'static + Fn(&mut Vm, Val, Val, Val) -> VmResult<Val>>(
+    pub fn with_args_3<F: 'static + Fn(&mut Vm, Val, Val, Val) -> VmResult<Val>>(
         name: &str,
         f: F,
     ) -> NativeFunction {

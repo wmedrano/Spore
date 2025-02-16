@@ -204,6 +204,10 @@ impl Objects {
         self.structs.get(struct_id)
     }
 
+    pub fn get_struct_mut(&mut self, struct_id: ObjectId<SporeStruct>) -> Option<&mut SporeStruct> {
+        self.structs.get_mut(struct_id)
+    }
+
     pub fn get_custom(&self, custom_id: ObjectId<SporeCustom>) -> Option<&SporeCustom> {
         self.custom.get(custom_id)
     }

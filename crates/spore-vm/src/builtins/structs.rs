@@ -7,7 +7,7 @@ use crate::{
 pub fn register(vm: &mut Vm) {
     vm.register_native_function(NativeFunction::new("struct", struct_fn))
         .register_native_function(NativeFunction::with_args_2("struct-get", struct_get_fn))
-        .register_native_function(NativeFunction::with_arg_3("struct-set!", struct_set_fn));
+        .register_native_function(NativeFunction::with_args_3("struct-set!", struct_set_fn));
 }
 
 fn struct_fn(vm: &mut Vm) -> VmResult<Val> {
@@ -30,7 +30,7 @@ fn struct_fn(vm: &mut Vm) -> VmResult<Val> {
             }
         }
     }
-    Ok(Val::Struct(vm.objects.register_struct(strct)))
+    Ok(vm.make_struct(strct))
 }
 
 fn struct_get_fn(vm: &mut Vm, strct: Val, sym: Val) -> VmResult<Val> {
@@ -46,14 +46,10 @@ fn struct_get_fn(vm: &mut Vm, strct: Val, sym: Val) -> VmResult<Val> {
 }
 
 fn struct_set_fn(vm: &mut Vm, strct: Val, sym: Val, val: Val) -> VmResult<Val> {
-    match (strct, sym) {
-        (Val::Struct(strct_id), Val::Symbol(sym)) => {
-            let strct = vm.objects.structs.get_mut(strct_id).unwrap();
-            strct.insert(sym, val);
-            Ok(Val::Void)
-        }
-        _ => Err(VmError::WrongType),
-    }
+    let sym = sym.as_symbol_id().ok_or(VmError::WrongType)?;
+    let strct = strct.as_struct_mut(vm).ok_or(VmError::WrongType)?;
+    strct.insert(sym, val);
+    Ok(Val::Void)
 }
 
 #[cfg(test)]

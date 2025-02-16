@@ -13,7 +13,7 @@ use crate::{object_store::ObjectId, vm::Vm, SporeCustomType, SporeList, SporeStr
 ///
 /// This is the highest possible value without increasing the size of `Val`. The size of `Val` is
 /// checked through unit tests.
-pub const SHORT_STR_LEN: usize = 14;
+const SHORT_STR_LEN: usize = 14;
 
 #[derive(Copy, Clone, Debug, Default, PartialEq)]
 pub struct ShortString {
@@ -101,6 +101,13 @@ impl Val {
         matches!(self, Val::Void)
     }
 
+    pub fn as_int(self) -> Option<i64> {
+        match self {
+            Val::Int(x) => Some(x),
+            _ => None,
+        }
+    }
+
     pub fn as_str<'a>(&'a self, vm: &'a Vm) -> Option<&'a str> {
         match self {
             Val::String(string_id) => vm.objects.get_str(*string_id),
@@ -139,6 +146,13 @@ impl Val {
     pub fn as_struct(self, vm: &Vm) -> Option<&SporeStruct> {
         match self {
             Val::Struct(object_id) => vm.objects.get_struct(object_id),
+            _ => None,
+        }
+    }
+
+    pub fn as_struct_mut(self, vm: &mut Vm) -> Option<&mut SporeStruct> {
+        match self {
+            Val::Struct(object_id) => vm.objects.get_struct_mut(object_id),
             _ => None,
         }
     }

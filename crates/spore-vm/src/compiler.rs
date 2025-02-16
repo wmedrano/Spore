@@ -108,7 +108,7 @@ impl Compiler<'_> {
                     Constant::Bool(x) => Val::Bool(*x),
                     Constant::Int(x) => Val::Int(*x),
                     Constant::Float(x) => Val::Float(*x),
-                    Constant::Symbol(x) => Val::Symbol(self.vm.objects.symbols.make_symbol_id(x)),
+                    Constant::Symbol(x) => Val::Symbol(self.vm.make_symbol_id(x)),
                     // TODO: x should be parsed for escape sequences.
                     Constant::String(x) => self.vm.make_string(*x),
                 };
@@ -117,7 +117,7 @@ impl Compiler<'_> {
             Ir::Deref(ident) => {
                 let instruction = match self.deref_idx(ident) {
                     Some(idx) => Instruction::Get(idx),
-                    None => Instruction::Deref(self.vm.objects.symbols.make_symbol_id(ident)),
+                    None => Instruction::Deref(self.vm.make_symbol_id(ident)),
                 };
                 dst.push(instruction);
             }
@@ -136,7 +136,7 @@ impl Compiler<'_> {
                         .make_symbol_id(builtins::INTERNAL_DEFINE_FUNCTION),
                 ));
                 dst.push(Instruction::Push(Val::Symbol(
-                    self.vm.objects.symbols.make_symbol_id(symbol),
+                    self.vm.make_symbol_id(symbol),
                 )));
                 self.compile(dst, expr);
                 dst.push(Instruction::Eval(3));

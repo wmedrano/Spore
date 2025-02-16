@@ -41,11 +41,14 @@ fn run(vm: &mut Vm, mut terminal: DefaultTerminal) -> Result<(), Box<dyn std::er
         r#"
 (define exit? false)
 (define text (new-buffer ""))
+(define cursor 0)
 
 (define (handle-event! event)
-  (if (< (string-len event) 2)
-    (buffer-append! text event)
-    (define exit? true)))
+  (if (= event "<esc>")
+    (define exit? true)
+    (do
+      (buffer-insert! text cursor event)
+      (define cursor (+ cursor (string-len event))))))
 "#,
     )
     .unwrap();

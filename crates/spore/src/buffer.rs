@@ -25,15 +25,16 @@ pub fn register_buffer(vm: &mut Vm) {
             Ok(val)
         },
     ))
-    .register_native_function(NativeFunction::with_args_2(
-        "buffer-append!",
-        move |vm: &mut Vm, buffer: Val, text: Val| {
+    .register_native_function(NativeFunction::with_args_3(
+        "buffer-insert!",
+        move |vm: &mut Vm, buffer: Val, pos: Val, text: Val| {
+            let pos = pos.as_int().ok_or(VmError::WrongType)?;
             let text = text
                 .as_str(vm)
                 .ok_or(VmError::WrongType)?
                 .to_compact_string();
             let buffer: &mut Buffer = buffer.as_custom_mut(vm).ok_or(VmError::WrongType)?;
-            buffer.text.insert(buffer.text.len(), &text);
+            buffer.text.insert(pos as usize, &text);
             Ok(Val::Void)
         },
     ))

@@ -15,7 +15,7 @@ use crate::{
         symbol::SymbolId,
         ShortString, Val,
     },
-    SporeCustomType, SporeRc,
+    SporeCustomType, SporeList, SporeRc, SporeStruct,
 };
 
 #[derive(Debug)]
@@ -159,6 +159,18 @@ impl Vm {
                 Val::String(id)
             }
         }
+    }
+
+    /// Make a new list.
+    pub fn make_list(&mut self, lst: impl Into<SporeList>) -> Val {
+        let lst = self.objects.register_list(lst.into());
+        Val::List(lst)
+    }
+
+    /// Make a new struct.
+    pub fn make_struct(&mut self, strct: impl Into<SporeStruct>) -> Val {
+        let strct = self.objects.register_struct(strct.into());
+        Val::Struct(strct)
     }
 
     /// Make a new custom value.
