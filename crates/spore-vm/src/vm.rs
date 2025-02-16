@@ -80,12 +80,14 @@ impl Default for Vm {
 }
 
 impl Vm {
-    pub fn apply(self, f: impl Fn(&mut Vm)) -> Vm {
+    /// Apply `f` to `self` and return the value.
+    pub fn with_applied(self, f: impl Fn(&mut Vm)) -> Vm {
         let mut vm = self;
         vm.apply_mut(f);
         vm
     }
 
+    /// Apply `f` to `Vm` and return a mutable reference to self.
     pub fn apply_mut(&mut self, f: impl Fn(&mut Vm)) -> &mut Vm {
         f(self);
         self
@@ -114,6 +116,13 @@ impl Vm {
 
     /// Set a global value.
     pub fn set_global(&mut self, symbol: SymbolId, value: Val) {
+        let globals = self.modules.get_mut(&self.common_symbols.global).unwrap();
+        globals.values.insert(symbol, value);
+    }
+
+    /// Set a global value.
+    pub fn set_global_by_name(&mut self, name: &str, value: Val) {
+        let symbol = self.make_symbol_id(name);
         let globals = self.modules.get_mut(&self.common_symbols.global).unwrap();
         globals.values.insert(symbol, value);
     }

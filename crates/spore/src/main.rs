@@ -21,7 +21,7 @@ pub enum Mode {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
-    let mut vm = Vm::default().apply(buffer::register_buffer);
+    let mut vm = Vm::default().with_applied(buffer::register_buffer);
     match args.mode {
         Mode::Editor => {
             let terminal = ratatui::init();

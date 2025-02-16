@@ -24,6 +24,7 @@ pub fn register_builtins(vm: &mut Vm) {
     .register_native_function(NativeFunction::with_arg_list("throw", throw_fn))
     .register_native_function(NativeFunction::with_args_1("val->string", val_to_string_fn))
     .register_native_function(NativeFunction::with_args_1("val->type", val_to_type_fn))
+    .register_native_function(NativeFunction::with_args_2("=", equal_fn))
     .register_native_function(NativeFunction::with_args_0("help", help_fn))
     .apply_mut(math::register)
     .apply_mut(strings::register)
@@ -77,6 +78,59 @@ fn val_to_type_fn(_: &mut Vm, val: Val) -> VmResult<Val> {
     Ok(Val::DataType(t))
 }
 
+fn equal_fn_impl(vm: &Vm, a: Val, b: Val) -> bool {
+    match (a, b) {
+        (Val::Void, Val::Void) => true,
+        (Val::Bool(a), Val::Bool(b)) => a == b,
+        (Val::Int(a), Val::Int(b)) => a == b,
+        (Val::Float(a), Val::Float(b)) => a == b,
+        (Val::Symbol(a), Val::Symbol(b)) => a == b,
+        (Val::String(a), Val::String(b)) => {
+            a == b || vm.objects.get_str(a) == vm.objects.get_str(b)
+        }
+        (Val::ShortString(a), Val::ShortString(b)) => a == b,
+        (Val::List(a_list_id), Val::List(b_list_id)) => {
+            a_list_id == b_list_id
+                || match (
+                    vm.objects.get_list(a_list_id),
+                    vm.objects.get_list(b_list_id),
+                ) {
+                    (Some(a_list), Some(b_list)) if a_list.len() == b_list.len() => a_list
+                        .iter()
+                        .zip(b_list.iter())
+                        .all(|(a_item, b_item)| equal_fn_impl(vm, *a_item, *b_item)),
+                    _ => false,
+                }
+        }
+        (Val::Struct(a_struct_id), Val::Struct(b_struct_id)) => {
+            a_struct_id == b_struct_id
+                || match (
+                    vm.objects.get_struct(a_struct_id),
+                    vm.objects.get_struct(b_struct_id),
+                ) {
+                    (Some(a_struct), Some(b_struct)) if a_struct.len() == b_struct.len() => {
+                        a_struct
+                            .iter()
+                            .all(|(a_key, a_val)| match b_struct.get(a_key) {
+                                Some(b_val) => equal_fn_impl(vm, *a_val, *b_val),
+                                None => false,
+                            })
+                    }
+                    _ => false,
+                }
+        }
+        (Val::NativeFunction(a), Val::NativeFunction(b)) => a == b,
+        (Val::BytecodeFunction(a), Val::BytecodeFunction(b)) => a == b,
+        (Val::Custom(a), Val::Custom(b)) => a == b,
+        (Val::DataType(a), Val::DataType(b)) => a == b,
+        _ => false,
+    }
+}
+
+fn equal_fn(vm: &mut Vm, a: Val, b: Val) -> VmResult<Val> {
+    Ok(Val::Bool(equal_fn_impl(vm, a, b)))
+}
+
 /// Print the help.
 fn help_fn(vm: &mut Vm) -> VmResult<Val> {
     let ret = SporeStruct::from_iter(vm.modules.iter().map(|(module_name, module)| {
@@ -92,7 +146,15 @@ fn help_fn(vm: &mut Vm) -> VmResult<Val> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{val::Val, vm::Vm, vm::VmError};
+    use crate::{
+        register_spore_type,
+        val::{functions::NativeFunction, Val},
+        vm::{Vm, VmError},
+    };
+
+    #[derive(Debug)]
+    struct TestCustomType;
+    register_spore_type!(TestCustomType);
 
     #[test]
     fn define_binds_values_to_name() {
@@ -107,6 +169,149 @@ mod tests {
         assert_eq!(vm.eval_str("(do)"), Ok(Val::Void));
         assert_eq!(vm.eval_str("(do 1)"), Ok(Val::Int(1)));
         assert_eq!(vm.eval_str("(do 1 2)"), Ok(Val::Int(2)));
+    }
+
+    #[test]
+    fn eq_with_equal_values_returns_true() {
+        let mut vm = Vm::default();
+        assert_eq!(vm.eval_str("(= false false)"), Ok(Val::Bool(true)));
+        assert_eq!(vm.eval_str("(= 1 1)"), Ok(Val::Bool(true)));
+        assert_eq!(vm.eval_str("(= 2.0 2.0)"), Ok(Val::Bool(true)));
+        assert_eq!(
+            vm.eval_str("(= \"shortstr\" \"shortstr\")"),
+            Ok(Val::Bool(true))
+        );
+        assert_eq!(
+            vm.eval_str("(= \"longer-str-is-eq-too\" \"longer-str-is-eq-too\")"),
+            Ok(Val::Bool(true))
+        );
+        assert_eq!(vm.eval_str("(= 'a-symbol 'a-symbol)"), Ok(Val::Bool(true)));
+    }
+
+    #[test]
+    fn eq_with_different_values_returns_false() {
+        let mut vm = Vm::default();
+        assert_eq!(vm.eval_str("(= false true)"), Ok(Val::Bool(false)));
+        assert_eq!(vm.eval_str("(= 1 1.0)"), Ok(Val::Bool(false)));
+        assert_eq!(vm.eval_str("(= 'symbol \"string\")"), Ok(Val::Bool(false)));
+        assert_eq!(vm.eval_str("(= 1 2)"), Ok(Val::Bool(false)));
+        assert_eq!(vm.eval_str("(= 2.0 3.0)"), Ok(Val::Bool(false)));
+        assert_eq!(vm.eval_str("(= \"a\" \"b\")"), Ok(Val::Bool(false)));
+        assert_eq!(
+            vm.eval_str("(= \"longer-str-is-not-eq-to\" \"short\")"),
+            Ok(Val::Bool(false))
+        );
+        assert_eq!(
+            vm.eval_str(
+                "(= \"longer-str-is-not-eq-to\" \"this-also-long-string-that-is-not-a-short-str\")"
+            ),
+            Ok(Val::Bool(false))
+        );
+        assert_eq!(vm.eval_str("(= 'a-symbol 'b-symbol)"), Ok(Val::Bool(false)));
+    }
+
+    #[test]
+    fn eq_with_void_returns_true() {
+        let mut vm = Vm::default();
+        vm.register_native_function(NativeFunction::new("new-void", |_| Ok(Val::Void)));
+        assert_eq!(
+            vm.eval_str("(= (new-void) (new-void))"),
+            Ok(Val::Bool(true))
+        );
+    }
+
+    #[test]
+    fn eq_with_same_lists_returns_true() {
+        let mut vm = Vm::default();
+        assert_eq!(
+            vm.eval_str("(= (list 1 2 3) (list 1 2 3))"),
+            Ok(Val::Bool(true))
+        );
+        vm.eval_str("(define eq-list (list 4 5 6))").unwrap();
+        assert_eq!(vm.eval_str("(= eq-list eq-list)"), Ok(Val::Bool(true)));
+    }
+
+    #[test]
+    fn eq_with_different_lists_returns_false() {
+        let mut vm = Vm::default();
+        assert_eq!(vm.eval_str("(= (list) (list 1))"), Ok(Val::Bool(false)));
+        assert_eq!(
+            vm.eval_str("(= (list 1 2 3) (list 4 5 6))"),
+            Ok(Val::Bool(false))
+        );
+    }
+
+    #[test]
+    fn eq_with_same_structs_returns_true() {
+        let mut vm = Vm::default();
+        assert_eq!(
+            vm.eval_str("(= (struct 'a 1 'b 2) (struct 'b 2 'a 1))"),
+            Ok(Val::Bool(true))
+        );
+        vm.eval_str("(define eq-struct (struct 'a 10 'b 20))")
+            .unwrap();
+        assert_eq!(vm.eval_str("(= eq-struct eq-struct)"), Ok(Val::Bool(true)));
+    }
+
+    #[test]
+    fn eq_with_different_structs_returns_false() {
+        let mut vm = Vm::default();
+        assert_eq!(
+            vm.eval_str("(= (struct 'a 1 'b 2) (struct 'c 1 'd 2))"),
+            Ok(Val::Bool(false))
+        );
+        assert_eq!(
+            vm.eval_str("(= (struct 'a 1) (struct 'a 2))"),
+            Ok(Val::Bool(false))
+        );
+    }
+
+    #[test]
+    fn eq_with_same_custom_type_returns_true() {
+        let mut vm = Vm::default();
+        let val = vm.make_custom(TestCustomType);
+        vm.set_global_by_name("custom-val", val);
+        assert_eq!(
+            vm.eval_str("(= custom-val custom-val)"),
+            Ok(Val::Bool(true))
+        );
+    }
+
+    #[test]
+    fn eq_with_different_but_equivalent_custom_type_returns_false() {
+        let mut vm = Vm::default();
+        let val1 = vm.make_custom(TestCustomType);
+        let val2 = vm.make_custom(TestCustomType);
+        vm.set_global_by_name("custom-val1", val1);
+        vm.set_global_by_name("custom-val2", val2);
+        assert_eq!(
+            vm.eval_str("(= custom-val1 custom-val2)"),
+            Ok(Val::Bool(false))
+        );
+    }
+
+    #[test]
+    fn eq_with_same_function_returns_true() {
+        let mut vm = Vm::default();
+        assert_eq!(vm.eval_str("(= = =)"), Ok(Val::Bool(true)));
+        vm.eval_str("(define (function-foo) 42)").unwrap();
+        assert_eq!(
+            vm.eval_str("(= function-foo function-foo)"),
+            Ok(Val::Bool(true))
+        );
+    }
+
+    #[test]
+    fn eq_with_different_function_returns_true() {
+        let mut vm = Vm::default();
+        assert_eq!(vm.eval_str("(= = <)"), Ok(Val::Bool(false)));
+        vm.eval_str("(define (function-foo) 42)").unwrap();
+        vm.eval_str("(define (function-bar) 42)").unwrap();
+        assert_eq!(
+            vm.eval_str("(= function-foo function-bar)"),
+            Ok(Val::Bool(false))
+        );
+        assert_eq!(vm.eval_str("(= function-foo <)"), Ok(Val::Bool(false)));
     }
 
     #[test]
