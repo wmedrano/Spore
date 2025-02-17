@@ -8,6 +8,7 @@ use widgets::BufferWidget;
 
 mod buffer;
 mod events;
+mod shell;
 mod widgets;
 
 #[derive(Parser, Debug)]
@@ -26,7 +27,9 @@ pub enum Mode {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
-    let mut vm = Vm::default().with(buffer::register_buffer);
+    let mut vm = Vm::default()
+        .with(buffer::register_buffer)
+        .with(shell::register_shell);
     match args.mode {
         Mode::Editor => {
             let terminal = ratatui::init();
@@ -42,42 +45,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn run(vm: &mut Vm, mut terminal: DefaultTerminal) -> Result<(), Box<dyn std::error::Error>> {
-    vm.eval_str(
-        r#"
-(define exit? false)
-(define text (new-buffer ""))
-(define cursor 0)
-
-(define (handle-event! event)
-  (if (= event "<esc>")
-    (do
-      (define exit? true)
-      (return)))
-  (if (= event "<backspace>")
-    (if (< 0 cursor)
-      (do
-        (define cursor (- cursor 1))
-        (buffer-delete! text cursor)
-        (return))))
-  (if (= event "<backspace>") (return))
-  (if (= event "<left>")
-    (do
-      (define cursor (buffer-normalize-cursor text (- cursor 1)))
-      (return)))
-  (if (= event "<right>")
-    (do
-      (define cursor (buffer-normalize-cursor text (+ cursor 1)))
-      (return)))
-  (if (= event "<enter>")
-    (do
-      (define cursor (+ cursor (buffer-insert! text cursor "
-")))
-      (return)))
-  (do
-    (define cursor (+ cursor (buffer-insert! text cursor event)))))
-"#,
-    )
-    .unwrap();
+    vm.eval_str(include_str!("main.lisp")).unwrap();
     while !vm
         .get_global_by_name("exit?")
         .unwrap_or_default()

@@ -1,4 +1,4 @@
-use compact_str::ToCompactString;
+use compact_str::{format_compact, ToCompactString};
 use crop::Rope;
 use spore_vm::{
     register_spore_type,
@@ -32,6 +32,26 @@ pub fn register_buffer(vm: &mut Vm) {
         |vm: &mut Vm, text: Val| {
             let text = text.as_str(vm).ok_or(VmError::WrongType)?;
             Ok(vm.make_custom(TextBuffer::new(text)))
+        },
+    ))
+    .register_native_function(NativeFunction::with_args_1(
+        "new-buffer-with-file",
+        |vm: &mut Vm, filename: Val| {
+            let filename = filename.as_str(vm).ok_or(VmError::WrongType)?;
+            let file_contents = std::fs::read_to_string(filename).map_err(|err| {
+                VmError::Custom(format_compact!(
+                    "Failed to read file {filename:?}: {err}",
+                    filename = filename
+                ))
+            })?;
+            Ok(vm.make_custom(TextBuffer::new(&file_contents)))
+        },
+    ))
+    .register_native_function(NativeFunction::with_args_1(
+        "buffer-len",
+        move |vm: &mut Vm, buffer: Val| {
+            let buffer: &TextBuffer = buffer.as_custom(vm).ok_or(VmError::WrongType)?;
+            Ok(Val::Int(buffer.text.byte_len() as i64))
         },
     ))
     .register_native_function(NativeFunction::with_args_3(
