@@ -35,11 +35,11 @@ macro_rules! register_spore_type {
     };
     ($typename:ty, $references:expr) => {
         impl $crate::SporeCustomType for $typename {
-            fn spore_as_any<'a>(&'a self) -> &'a dyn std::any::Any {
+            fn spore_as_any(&self) -> &dyn std::any::Any {
                 self
             }
 
-            fn spore_as_any_mut<'a>(&'a mut self) -> &'a mut dyn std::any::Any {
+            fn spore_as_any_mut(&mut self) -> &mut dyn std::any::Any {
                 self
             }
         }

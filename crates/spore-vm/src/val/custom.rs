@@ -3,8 +3,8 @@ use std::any::{type_name_of_val, Any};
 use super::Val;
 
 pub trait SporeCustomType: 'static + std::fmt::Debug {
-    fn spore_as_any<'a>(&'a self) -> &'a dyn Any;
-    fn spore_as_any_mut<'a>(&'a mut self) -> &'a mut dyn Any;
+    fn spore_as_any(&self) -> &dyn Any;
+    fn spore_as_any_mut(&mut self) -> &mut dyn Any;
     fn spore_name(&self) -> &'static str {
         type_name_of_val(self)
     }

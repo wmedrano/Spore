@@ -7,7 +7,9 @@ edition = "2021"
 compact_str = "0.8"
 crossterm = "0.28"
 ratatui = "0.29.0"
-ropey = "2.0.0-alpha.2"
 spore-vm = { path = "../spore-vm" }
 spore-repl = { path = "../spore-repl" }
 clap = { version = "4.5.29", features = ["derive"] }
+unicode-segmentation = "1.12"
+unicode-width = "0.1"
+crop = { version = "0.4", features = ["graphemes"] }

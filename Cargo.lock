@@ -173,6 +173,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "crop"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c0c36a21e864b7accff2cf3bef09af553704556ff2fb704ebee242bfc5c89f10"
+dependencies = [
+ "str_indices",
+ "unicode-segmentation",
+]
+
+[[package]]
 name = "crossterm"
 version = "0.28.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -531,15 +541,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ropey"
-version = "2.0.0-alpha.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b578e097516cdb65f10ac5c70575477bb2f3aa1d31d1755ffa155502562cba9c"
-dependencies = [
- "str_indices",
-]
-
-[[package]]
 name = "rustix"
 version = "0.38.44"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -634,11 +635,13 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "compact_str",
+ "crop",
  "crossterm",
  "ratatui",
- "ropey",
  "spore-repl",
  "spore-vm",
+ "unicode-segmentation",
+ "unicode-width 0.1.14",
 ]
 
 [[package]]

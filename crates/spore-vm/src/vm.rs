@@ -237,9 +237,9 @@ pub struct VmErrorWithContext<'a> {
     source: &'a str,
 }
 
-impl<'a> std::error::Error for VmErrorWithContext<'a> {}
+impl std::error::Error for VmErrorWithContext<'_> {}
 
-impl<'a> std::fmt::Display for VmErrorWithContext<'a> {
+impl std::fmt::Display for VmErrorWithContext<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.err {
             VmError::Compile(err) => {

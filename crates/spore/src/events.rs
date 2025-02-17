@@ -1,16 +1,15 @@
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use compact_str::{format_compact, CompactString};
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
-pub fn events() -> impl Iterator<Item = CompactString> {
-    let deadline = Instant::now() + Duration::from_millis(100);
+pub fn events(timeout: Duration) -> impl Iterator<Item = CompactString> {
+    let mut has_event = event::poll(timeout).unwrap_or(false);
     std::iter::from_fn(move || {
-        let has_event = event::poll(Instant::now().duration_since(deadline)).unwrap_or(false);
         if !has_event {
             return None;
         }
-        match event::read().ok()? {
+        let ret = match event::read().ok()? {
             Event::Key(KeyEvent {
                 code,
                 modifiers,
@@ -52,6 +51,8 @@ pub fn events() -> impl Iterator<Item = CompactString> {
                 }
             }
             _ => Some(CompactString::const_new("<unsupported>")),
-        }
+        };
+        has_event = event::poll(Duration::from_secs(0)).unwrap_or(false);
+        ret
     })
 }

@@ -173,7 +173,7 @@ impl std::fmt::Display for AstError {
 }
 
 impl AstError {
-    pub fn with_context<'a>(self, source: &'a str) -> AstErrorWithContext<'a> {
+    pub fn with_context(self, source: &str) -> AstErrorWithContext<'_> {
         AstErrorWithContext { err: self, source }
     }
 }
@@ -184,9 +184,9 @@ pub struct AstErrorWithContext<'a> {
     source: &'a str,
 }
 
-impl<'a> std::error::Error for AstErrorWithContext<'a> {}
+impl std::error::Error for AstErrorWithContext<'_> {}
 
-impl<'a> std::fmt::Display for AstErrorWithContext<'a> {
+impl std::fmt::Display for AstErrorWithContext<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.err {
             AstError::UnclosedParen(span) => {

@@ -117,7 +117,7 @@ impl std::fmt::Display for IrError {
 }
 
 impl IrError {
-    pub fn with_context<'a>(self, source: &'a str) -> IrErrorWithContext<'a> {
+    pub fn with_context(self, source: &str) -> IrErrorWithContext<'_> {
         IrErrorWithContext { err: self, source }
     }
 }
@@ -128,9 +128,9 @@ pub struct IrErrorWithContext<'a> {
     source: &'a str,
 }
 
-impl<'a> std::error::Error for IrErrorWithContext<'a> {}
+impl std::error::Error for IrErrorWithContext<'_> {}
 
-impl<'a> std::fmt::Display for IrErrorWithContext<'a> {
+impl std::fmt::Display for IrErrorWithContext<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.err {
             IrError::EmptyFunctionCall(span) => write!(

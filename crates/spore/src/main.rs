@@ -1,9 +1,14 @@
+use std::time::Duration;
+
+use buffer::TextBuffer;
 use clap::{Parser, ValueEnum};
 use ratatui::{DefaultTerminal, Frame};
 use spore_vm::{val::Val, vm::Vm};
+use widgets::BufferWidget;
 
 mod buffer;
 mod events;
+mod widgets;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -55,14 +60,21 @@ fn run(vm: &mut Vm, mut terminal: DefaultTerminal) -> Result<(), Box<dyn std::er
         (buffer-delete! text cursor)
         (return))))
   (if (= event "<backspace>") (return))
+  (if (= event "<left>")
+    (do
+      (define cursor (buffer-normalize-cursor text (- cursor 1)))
+      (return)))
+  (if (= event "<right>")
+    (do
+      (define cursor (buffer-normalize-cursor text (+ cursor 1)))
+      (return)))
   (if (= event "<enter>")
     (do
-      (buffer-insert! text cursor "")
-      (define cursor (+ cursor 1))
+      (define cursor (+ cursor (buffer-insert! text cursor "
+")))
       (return)))
   (do
-    (buffer-insert! text cursor event)
-    (define cursor (+ cursor (string-len event)))))
+    (define cursor (+ cursor (buffer-insert! text cursor event)))))
 "#,
     )
     .unwrap();
@@ -71,9 +83,17 @@ fn run(vm: &mut Vm, mut terminal: DefaultTerminal) -> Result<(), Box<dyn std::er
         .unwrap_or_default()
         .is_truthy()
     {
-        let text_val = vm.eval_str("(buffer->string text)").unwrap();
-        let text = text_val.as_str(&vm).unwrap();
-        terminal.draw(|frame: &mut Frame| frame.render_widget(text, frame.area()))?;
+        let cursor = vm
+            .get_global_by_name("cursor")
+            .unwrap_or(Val::Int(0))
+            .as_int()
+            .unwrap() as usize;
+        let text_buffer_val = vm.eval_str("text").unwrap();
+        let text_buffer: &TextBuffer = text_buffer_val.as_custom(&vm).unwrap();
+        terminal.draw(|frame: &mut Frame| {
+            frame.render_widget(ratatui::widgets::Clear, frame.area());
+            frame.render_widget(BufferWidget::new(text_buffer, cursor), frame.area());
+        })?;
         handle_events(vm);
     }
     Ok(())
@@ -81,7 +101,7 @@ fn run(vm: &mut Vm, mut terminal: DefaultTerminal) -> Result<(), Box<dyn std::er
 
 fn handle_events(vm: &mut Vm) {
     vm.set_global_by_name("tmp-event", Val::Void);
-    for event in events::events() {
+    for event in events::events(Duration::from_secs(1)) {
         let s = vm.make_string(event.clone());
         vm.set_global_by_name("tmp-event", s);
         vm.eval_str("(handle-event! tmp-event)").unwrap();

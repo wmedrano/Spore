@@ -41,7 +41,7 @@ impl std::fmt::Display for CompileError {
 }
 
 impl CompileError {
-    pub fn with_context<'a>(self, source: &'a str) -> CompileErrorWithContext<'a> {
+    pub fn with_context(self, source: &str) -> CompileErrorWithContext<'_> {
         CompileErrorWithContext { err: self, source }
     }
 }
@@ -52,9 +52,9 @@ pub struct CompileErrorWithContext<'a> {
     source: &'a str,
 }
 
-impl<'a> std::error::Error for CompileErrorWithContext<'a> {}
+impl std::error::Error for CompileErrorWithContext<'_> {}
 
-impl<'a> std::fmt::Display for CompileErrorWithContext<'a> {
+impl std::fmt::Display for CompileErrorWithContext<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.err {
             CompileError::Ast(e) => write!(f, "{}", e.with_context(self.source)),
