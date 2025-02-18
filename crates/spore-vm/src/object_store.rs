@@ -1,4 +1,4 @@
-use std::{collections::HashMap, hash::Hash, marker::PhantomData};
+use std::{collections::HashMap, hash::Hash, marker::PhantomData, num::NonZeroU32};
 
 use compact_str::CompactString;
 
@@ -16,18 +16,12 @@ use crate::{
 };
 
 /// An identifier for an object in the object store.
-pub struct ObjectId<T>(u32, PhantomData<T>);
-
-impl<T> Default for ObjectId<T> {
-    fn default() -> ObjectId<T> {
-        ObjectId(0, PhantomData)
-    }
-}
+pub struct ObjectId<T>(NonZeroU32, PhantomData<T>);
 
 impl<T> ObjectId<T> {
     /// Get the id as a number.
     pub fn as_num(self) -> u32 {
-        self.0
+        u32::from(self.0)
     }
 }
 
@@ -56,7 +50,7 @@ pub enum GcColor {
 /// A store for objects of a specific type.
 pub struct TypedObjectStore<T> {
     id_to_object: HashMap<ObjectId<T>, ColoredObject<T>>,
-    next_id: u32,
+    next_id: NonZeroU32,
 }
 
 impl<T> std::fmt::Debug for ObjectId<T> {
@@ -88,7 +82,7 @@ impl<T> Default for TypedObjectStore<T> {
     fn default() -> Self {
         TypedObjectStore {
             id_to_object: HashMap::new(),
-            next_id: 1,
+            next_id: NonZeroU32::new(1).unwrap(),
         }
     }
 }
@@ -120,7 +114,10 @@ impl<T> TypedObjectStore<T> {
     /// Registers a new object in the store.
     pub fn register(&mut self, object: T, color: GcColor) -> ObjectId<T> {
         let id = ObjectId(self.next_id, PhantomData);
-        self.next_id += 1;
+        self.next_id = self
+            .next_id
+            .checked_add(1)
+            .expect("ObjectId limit reached, all u32 values exhausted");
         self.id_to_object
             .insert(id, ColoredObject { object, color });
         id
@@ -349,5 +346,22 @@ impl Objects {
         self.native_functions.sweep_color(self.reachable_color);
         self.bytecode_functions.sweep_color(self.reachable_color);
         self.custom.sweep_color(self.reachable_color);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn object_id_is_small() {
+        assert_eq!(
+            std::mem::size_of::<ObjectId<()>>(),
+            std::mem::size_of::<u32>()
+        );
+        assert_eq!(
+            std::mem::size_of::<Option<ObjectId<()>>>(),
+            std::mem::size_of::<u32>()
+        );
     }
 }

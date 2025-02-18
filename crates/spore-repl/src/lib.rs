@@ -105,7 +105,7 @@ impl Repl {
     fn execute_code(&mut self, input: &str, asts: &[Ast]) -> VmResult<String> {
         let mut res = Vec::with_capacity(asts.len());
         for ast in asts {
-            let val = self.vm.eval_ast(input, &ast)?;
+            let val = self.vm.clean_eval_ast(input, ast)?;
             if val.is_void() {
                 continue;
             }

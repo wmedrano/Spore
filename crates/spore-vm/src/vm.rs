@@ -35,18 +35,14 @@ pub struct Vm {
 pub struct StackFrame {
     stack_start: usize,
     bytecode_idx: usize,
-    function: ObjectId<ByteCodeFunction>,
+    function: Option<ObjectId<ByteCodeFunction>>,
     instructions: SporeRc<[Instruction]>,
 }
 
 impl StackFrame {
     /// Returns the backing function or `None` if the current function is a native function.
     pub fn function_val(&self) -> Option<Val> {
-        if self.function.as_num() == 0 {
-            None
-        } else {
-            Some(Val::BytecodeFunction(self.function))
-        }
+        self.function.map(|id| Val::BytecodeFunction(id))
     }
 }
 
@@ -142,6 +138,11 @@ impl Vm {
     /// Make a new symbol and return it as a symbol id.
     pub fn make_symbol_id(&mut self, name: &str) -> SymbolId {
         self.objects.symbols.make_symbol_id(name)
+    }
+
+    /// Get the symbol id or return `None` if it does not exist.
+    pub fn symbol_id(&self, name: &str) -> Option<SymbolId> {
+        self.objects.symbols.symbol_id(name)
     }
 
     /// Make a new symbol and return it as a `Val`.
@@ -292,55 +293,39 @@ impl From<AstError> for VmError {
 }
 
 impl Vm {
-    /// Evaluates a string of code.
+    /// Evaluates a string of Spore code.
     ///
-    /// This function takes a string of spore code, compiles it into bytecode, and then
-    /// executes the bytecode in the VM. It returns the resulting `Val` or an error
-    /// if compilation or execution fails.
-    pub fn eval_str(&mut self, s: &str) -> VmResult<Val> {
+    /// Note: This should not be used in a Spore Native Function as it resets the evaluation.
+    pub fn clean_eval_str(&mut self, s: &str) -> VmResult<Val> {
         let mut ret = Val::Void;
         for ast in Ast::with_source(s)? {
-            ret = self.eval_ast(s, &ast)?;
+            ret = self.clean_eval_ast(s, &ast)?;
         }
         Ok(ret)
     }
 
-    /// Evaluates an AST.
+    /// Evaluates the AST of Spore code.
     ///
-    /// This is similar to `eval_str`, but is more efficient if you already have an `Ast`.
-    pub fn eval_ast(&mut self, s: &str, ast: &Ast) -> VmResult<Val> {
-        self.objects.run_gc(
-            &self.stack,
-            self.previous_stack_frames
-                .iter()
-                .chain(std::iter::once(&self.stack_frame)),
-            std::iter::once(&self.globals),
-        );
+    /// This is similar to `clean_eval_str`, but is more efficient if the AST is already built up.
+    ///
+    /// Note: This should not be used in a Spore Native Function as it resets the evaluation.
+    pub fn clean_eval_ast(&mut self, s: &str, ast: &Ast) -> VmResult<Val> {
+        self.run_gc();
         self.stack.clear();
         let bytecode = ByteCodeFunction::new(self, s, ast, &Bump::new())?;
-        self.eval_bytecode(bytecode)
+        let bytecode_id = self.objects.register_bytecode(bytecode);
+        self.eval_function(Val::BytecodeFunction(bytecode_id), &[])
     }
 
-    /// Evaluates a pre-compiled bytecode function.
+    /// Evaluate a function and return its result.
     ///
-    /// This function executes a pre-compiled `ByteCodeFunction` within the VM. It sets up
-    /// a new stack frame, executes the bytecode instructions, and returns the resulting
-    /// `Val` or an error if execution fails.
-    fn eval_bytecode(&mut self, bytecode: ByteCodeFunction) -> VmResult<Val> {
-        assert_eq!(bytecode.args, 0);
+    /// Note: This does not reset the environment so pending computations and errors will not be
+    /// cleared.
+    pub fn eval_function(&mut self, f: Val, args: &[Val]) -> VmResult<Val> {
         let initial_stack_frames = self.previous_stack_frames.len();
-        let instructions = bytecode.instructions.clone();
-        let function = self.objects.register_bytecode(bytecode);
-        let previous_stack_frame = std::mem::replace(
-            &mut self.stack_frame,
-            StackFrame {
-                stack_start: self.stack.len(),
-                bytecode_idx: 0,
-                function,
-                instructions,
-            },
-        );
-        self.previous_stack_frames.push(previous_stack_frame);
+        self.stack.push(f);
+        self.stack.extend_from_slice(args);
+        self.execute_eval(1 + args.len())?;
         self.run(initial_stack_frames)
     }
 
@@ -420,7 +405,7 @@ impl Vm {
                     StackFrame {
                         stack_start,
                         bytecode_idx: 0,
-                        function: ObjectId::default(),
+                        function: None,
                         instructions: self.objects.null_bytecode.instructions.clone(),
                     },
                 );
@@ -454,7 +439,7 @@ impl Vm {
                     StackFrame {
                         stack_start,
                         bytecode_idx: 0,
-                        function: bytecode_function,
+                        function: Some(bytecode_function),
                         instructions: function.instructions.clone(),
                     },
                 );
@@ -483,76 +468,98 @@ impl Vm {
     }
 }
 
+impl Vm {
+    /// Run the garbage collector.
+    pub fn run_gc(&mut self) {
+        self.objects.run_gc(
+            &self.stack,
+            self.previous_stack_frames
+                .iter()
+                .chain(std::iter::once(&self.stack_frame)),
+            std::iter::once(&self.globals),
+        );
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn function_call_calls_function_with_args() {
-        assert_eq!(Vm::default().eval_str("(+ 1 2 3 4)").unwrap(), Val::Int(10));
+        assert_eq!(
+            Vm::default().clean_eval_str("(+ 1 2 3 4)").unwrap(),
+            Val::Int(10)
+        );
     }
 
     #[test]
     fn define_sets_value_of_symbol() {
         let mut vm = Vm::default();
-        assert_eq!(vm.eval_str("(define x 12)").unwrap(), Val::Void);
-        assert_eq!(vm.eval_str("x").unwrap(), Val::Int(12));
+        assert_eq!(vm.clean_eval_str("(define x 12)").unwrap(), Val::Void);
+        assert_eq!(vm.clean_eval_str("x").unwrap(), Val::Int(12));
     }
 
     #[test]
     fn define_lambda_creates_callable_function() {
         let mut vm = Vm::default();
-        assert_eq!(vm.eval_str("(define x (lambda () 12))").unwrap(), Val::Void);
-        assert_eq!(vm.eval_str("(x)").unwrap(), Val::Int(12));
+        assert_eq!(
+            vm.clean_eval_str("(define x (lambda () 12))").unwrap(),
+            Val::Void
+        );
+        assert_eq!(vm.clean_eval_str("(x)").unwrap(), Val::Int(12));
     }
 
     #[test]
     fn define_lambda_with_args_creates_callable_function() {
         let mut vm = Vm::default();
         assert_eq!(
-            vm.eval_str("(define x (lambda (a b c) (+ a b c)))")
+            vm.clean_eval_str("(define x (lambda (a b c) (+ a b c)))")
                 .unwrap(),
             Val::Void
         );
-        assert_eq!(vm.eval_str("(x 1 2 3)").unwrap(), Val::Int(6));
+        assert_eq!(vm.clean_eval_str("(x 1 2 3)").unwrap(), Val::Int(6));
     }
 
     #[test]
     fn define_creates_callable_function() {
         let mut vm = Vm::default();
         assert_eq!(
-            vm.eval_str("(define (foo) (+ 1 2 3 4))").unwrap(),
+            vm.clean_eval_str("(define (foo) (+ 1 2 3 4))").unwrap(),
             Val::Void,
         );
-        assert_eq!(vm.eval_str("(foo)").unwrap(), Val::Int(10));
+        assert_eq!(vm.clean_eval_str("(foo)").unwrap(), Val::Int(10));
     }
 
     #[test]
     fn function_with_multiple_values_returns_last_value() {
         let mut vm = Vm::default();
-        assert_eq!(vm.eval_str("(define (foo) 1 2 3 4)").unwrap(), Val::Void,);
-        assert_eq!(vm.eval_str("(foo)").unwrap(), Val::Int(4));
+        assert_eq!(
+            vm.clean_eval_str("(define (foo) 1 2 3 4)").unwrap(),
+            Val::Void,
+        );
+        assert_eq!(vm.clean_eval_str("(foo)").unwrap(), Val::Int(4));
     }
 
     #[test]
     fn define_with_args_creates_callable_function() {
         let mut vm = Vm::default();
         assert_eq!(
-            vm.eval_str("(define (foo a b c) (+ a b c))").unwrap(),
+            vm.clean_eval_str("(define (foo a b c) (+ a b c))").unwrap(),
             Val::Void,
         );
-        assert_eq!(vm.eval_str("(foo 1 2 3)").unwrap(), Val::Int(6));
+        assert_eq!(vm.clean_eval_str("(foo 1 2 3)").unwrap(), Val::Int(6));
     }
 
     #[test]
     fn function_with_wrong_number_of_args_fails() {
         let mut vm = Vm::default();
         assert_eq!(
-            vm.eval_str("(define (foo a b c) (+ a b c))").unwrap(),
+            vm.clean_eval_str("(define (foo a b c) (+ a b c))").unwrap(),
             Val::Void
         );
         assert_eq!(
-            vm.eval_str("(foo 1)").unwrap_err(),
+            vm.clean_eval_str("(foo 1)").unwrap_err(),
             VmError::WrongArity {
                 expected: 3,
                 actual: 1
@@ -563,25 +570,25 @@ mod tests {
     #[test]
     fn if_with_true_pred_returns_true_branch() {
         let mut vm = Vm::default();
-        assert_eq!(vm.eval_str("(if (< 1 2) 3 4)").unwrap(), Val::Int(3));
+        assert_eq!(vm.clean_eval_str("(if (< 1 2) 3 4)").unwrap(), Val::Int(3));
     }
 
     #[test]
     fn if_with_false_pred_returns_false_branch() {
         let mut vm = Vm::default();
-        assert_eq!(vm.eval_str("(if (< 2 1) 3 4)").unwrap(), Val::Int(4));
+        assert_eq!(vm.clean_eval_str("(if (< 2 1) 3 4)").unwrap(), Val::Int(4));
     }
 
     #[test]
     fn if_with_true_pred_and_no_false_branch_returns_true_branch() {
         let mut vm = Vm::default();
-        assert_eq!(vm.eval_str("(if (< 1 2) 3)").unwrap(), Val::Int(3));
+        assert_eq!(vm.clean_eval_str("(if (< 1 2) 3)").unwrap(), Val::Int(3));
     }
 
     #[test]
     fn if_with_false_pred_and_no_false_branch_returns_true_void() {
         let mut vm = Vm::default();
-        assert_eq!(vm.eval_str("(if (< 2 1) 3)").unwrap(), Val::Void);
+        assert_eq!(vm.clean_eval_str("(if (< 2 1) 3)").unwrap(), Val::Void);
     }
 
     #[test]
@@ -593,11 +600,11 @@ mod tests {
   (if (< n 2) (return n))
   (+ (fib (- n 2)) (fib (- n 1))))"#;
         assert_eq!(
-            vm.eval_str(source)
+            vm.clean_eval_str(source)
                 .map_err(|err| err.clone().with_context(&vm, source))
                 .unwrap(),
             Val::Void
         );
-        assert_eq!(vm.eval_str("(fib 10)").unwrap(), Val::Int(55));
+        assert_eq!(vm.clean_eval_str("(fib 10)").unwrap(), Val::Int(55));
     }
 }

@@ -46,21 +46,21 @@ mod tests {
     #[test]
     fn list_with_no_args_returns_empty_list() {
         let mut vm = Vm::default();
-        let got = vm.eval_str("(list)").unwrap();
+        let got = vm.clean_eval_str("(list)").unwrap();
         assert_eq!(got.as_list(&vm).unwrap(), &[]);
     }
 
     #[test]
     fn list_with_one_arg_returns_list_with_one_element() {
         let mut vm = Vm::default();
-        let got = vm.eval_str("(list 1)").unwrap();
+        let got = vm.clean_eval_str("(list 1)").unwrap();
         assert_eq!(got.as_list(&vm).unwrap(), &[Val::Int(1)]);
     }
 
     #[test]
     fn list_with_multiple_args_returns_list_with_all_elements() {
         let mut vm = Vm::default();
-        let got = vm.eval_str("(list 1 2 3)").unwrap();
+        let got = vm.clean_eval_str("(list 1 2 3)").unwrap();
         assert_eq!(
             got.as_list(&vm).unwrap(),
             &[Val::Int(1), Val::Int(2), Val::Int(3)]
@@ -70,7 +70,7 @@ mod tests {
     #[test]
     fn list_with_different_types_of_args() {
         let mut vm = Vm::default();
-        let got = vm.eval_str("(list 1 2.0 true)").unwrap();
+        let got = vm.clean_eval_str("(list 1 2.0 true)").unwrap();
         assert_eq!(
             got.as_list(&vm).unwrap(),
             &[Val::Int(1), Val::Float(2.0), Val::Bool(true)]
@@ -80,23 +80,23 @@ mod tests {
     #[test]
     fn list_len_returns_the_length_of_the_list() {
         let mut vm = Vm::default();
-        vm.eval_str("(define lst (list 1 2 3))").unwrap();
-        let got = vm.eval_str("(list-len lst)").unwrap();
+        vm.clean_eval_str("(define lst (list 1 2 3))").unwrap();
+        let got = vm.clean_eval_str("(list-len lst)").unwrap();
         assert_eq!(got, Val::Int(3));
     }
 
     #[test]
     fn list_len_returns_0_for_empty_list() {
         let mut vm = Vm::default();
-        vm.eval_str("(define lst (list))").unwrap();
-        let got = vm.eval_str("(list-len lst)").unwrap();
+        vm.clean_eval_str("(define lst (list))").unwrap();
+        let got = vm.clean_eval_str("(list-len lst)").unwrap();
         assert_eq!(got, Val::Int(0));
     }
 
     #[test]
     fn list_len_errors_if_not_a_list() {
         let mut vm = Vm::default();
-        let got = vm.eval_str("(list-len 1)");
+        let got = vm.clean_eval_str("(list-len 1)");
         assert_eq!(got, Err(VmError::WrongType));
     }
 
@@ -104,7 +104,7 @@ mod tests {
     fn nth_returns_element_at_index() {
         let mut vm = Vm::default();
         let got = vm
-            .eval_str("(do (define lst (list 1 2 3)) (nth lst 1))")
+            .clean_eval_str("(do (define lst (list 1 2 3)) (nth lst 1))")
             .unwrap();
         assert_eq!(got, Val::Int(2));
     }
@@ -112,29 +112,29 @@ mod tests {
     #[test]
     fn nth_returns_error_if_index_out_of_bounds() {
         let mut vm = Vm::default();
-        let got = vm.eval_str("(do (define lst (list 1 2 3)) (nth lst 3))");
+        let got = vm.clean_eval_str("(do (define lst (list 1 2 3)) (nth lst 3))");
         assert_eq!(got, Err(VmError::Custom("index out of range".into())));
     }
 
     #[test]
     fn nth_returns_error_if_index_is_negative() {
         let mut vm = Vm::default();
-        let got = vm.eval_str("(do (define lst (list 1 2 3)) (nth lst -1))");
+        let got = vm.clean_eval_str("(do (define lst (list 1 2 3)) (nth lst -1))");
         assert_eq!(got, Err(VmError::Custom("negative idx provided".into())));
     }
 
     #[test]
     fn nth_returns_error_if_first_arg_is_not_list() {
         let mut vm = Vm::default();
-        let got = vm.eval_str("(nth 1 1)");
+        let got = vm.clean_eval_str("(nth 1 1)");
         assert_eq!(got, Err(VmError::WrongType));
     }
 
     #[test]
     fn nth_returns_error_if_second_arg_is_not_int() {
         let mut vm = Vm::default();
-        vm.eval_str("(define lst (list 1 2 3))").unwrap();
-        let got = vm.eval_str("(nth lst true)");
+        vm.clean_eval_str("(define lst (list 1 2 3))").unwrap();
+        let got = vm.clean_eval_str("(nth lst true)");
         assert_eq!(got, Err(VmError::WrongType));
     }
 }

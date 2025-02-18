@@ -1,13 +1,16 @@
 use std::time::Duration;
 
-use buffer::TextBuffer;
 use clap::{Parser, ValueEnum};
 use ratatui::{DefaultTerminal, Frame};
-use spore_vm::{val::Val, vm::Vm};
+use spore_vm::{
+    val::{symbol::SymbolId, Val},
+    vm::Vm,
+};
 use widgets::BufferWidget;
 
 mod buffer;
 mod events;
+mod files;
 mod shell;
 mod widgets;
 
@@ -29,7 +32,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
     let mut vm = Vm::default()
         .with(buffer::register_buffer)
-        .with(shell::register_shell);
+        .with(shell::register_shell)
+        .with(files::register_files);
     match args.mode {
         Mode::Editor => {
             let terminal = ratatui::init();
@@ -44,23 +48,36 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 }
 
+#[derive(Copy, Clone)]
+pub struct Symbols {
+    buffer: SymbolId,
+    cursor: SymbolId,
+    exit_p: SymbolId,
+    screen: SymbolId,
+}
+
+impl Symbols {
+    fn new(vm: &mut Vm) -> Symbols {
+        Symbols {
+            buffer: vm.make_symbol_id("buffer"),
+            cursor: vm.make_symbol_id("cursor"),
+            exit_p: vm.make_symbol_id("exit?"),
+            screen: vm.make_symbol_id("screen"),
+        }
+    }
+}
+
 fn run(vm: &mut Vm, mut terminal: DefaultTerminal) -> Result<(), Box<dyn std::error::Error>> {
-    vm.eval_str(include_str!("main.lisp")).unwrap();
+    let symbols = Symbols::new(vm);
+    vm.clean_eval_str(include_str!("main.lisp")).unwrap();
     while !vm
-        .get_global_by_name("exit?")
+        .get_global(symbols.exit_p)
         .unwrap_or_default()
         .is_truthy()
     {
-        let cursor = vm
-            .get_global_by_name("cursor")
-            .unwrap_or(Val::Int(0))
-            .as_int()
-            .unwrap() as usize;
-        let text_buffer_val = vm.eval_str("text").unwrap();
-        let text_buffer: &TextBuffer = text_buffer_val.as_custom(&vm).unwrap();
+        vm.run_gc();
         terminal.draw(|frame: &mut Frame| {
-            frame.render_widget(ratatui::widgets::Clear, frame.area());
-            frame.render_widget(BufferWidget::new(text_buffer, cursor), frame.area());
+            draw(frame, vm, &symbols);
         })?;
         handle_events(vm);
     }
@@ -72,6 +89,32 @@ fn handle_events(vm: &mut Vm) {
     for event in events::events(Duration::from_secs(1)) {
         let s = vm.make_string(event.clone());
         vm.set_global_by_name("tmp-event", s);
-        vm.eval_str("(handle-event! tmp-event)").unwrap();
+        vm.clean_eval_str("(handle-event! tmp-event)").unwrap();
+    }
+}
+
+fn draw(frame: &mut Frame, vm: &Vm, symbols: &Symbols) {
+    let cursor = vm
+        .get_global(symbols.cursor)
+        .unwrap_or(Val::Int(0))
+        .as_int()
+        .unwrap() as usize;
+
+    frame.render_widget(ratatui::widgets::Clear, frame.area());
+    let screen = vm.get_global(symbols.screen).unwrap().as_list(vm).unwrap();
+    for widget in screen {
+        let widget_struct = widget.as_struct(vm).unwrap();
+        let text_buffer = widget_struct
+            .get(&symbols.buffer)
+            .unwrap()
+            .as_custom(vm)
+            .unwrap();
+        let cursor = widget_struct
+            .get(&symbols.cursor)
+            .unwrap_or(&Val::Int(cursor as i64))
+            .as_int()
+            .unwrap();
+        let cursor = if cursor < 0 { 0 } else { cursor as usize };
+        frame.render_widget(BufferWidget::new(text_buffer, cursor), frame.area());
     }
 }

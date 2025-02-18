@@ -91,21 +91,24 @@ mod tests {
     #[test]
     fn empty_plus_is_0() {
         let mut vm = Vm::default();
-        assert_eq!(vm.eval_str("(+)").unwrap(), Val::Int(0));
+        assert_eq!(vm.clean_eval_str("(+)").unwrap(), Val::Int(0));
     }
 
     #[test]
     fn plus_with_non_number_returns_error() {
         let mut vm = Vm::default();
-        assert_eq!(vm.eval_str("(+ -1 2 -3 4 false)"), Err(VmError::WrongType));
+        assert_eq!(
+            vm.clean_eval_str("(+ -1 2 -3 4 false)"),
+            Err(VmError::WrongType)
+        );
     }
 
     #[test]
     fn plus_adds_numbers() {
         let mut vm = Vm::default();
-        assert_eq!(vm.eval_str("(+ -1 2 -3 4)").unwrap(), Val::Int(2));
+        assert_eq!(vm.clean_eval_str("(+ -1 2 -3 4)").unwrap(), Val::Int(2));
         assert_eq!(
-            vm.eval_str("(+ -1.0 -2.0 3.0 4.0)").unwrap(),
+            vm.clean_eval_str("(+ -1.0 -2.0 3.0 4.0)").unwrap(),
             Val::Float(4.0)
         );
     }
@@ -113,14 +116,17 @@ mod tests {
     #[test]
     fn plus_with_ints_and_floats_is_float() {
         let mut vm = Vm::default();
-        assert_eq!(vm.eval_str("(+ -1 2 -3.0 4.0)").unwrap(), Val::Float(2.0));
+        assert_eq!(
+            vm.clean_eval_str("(+ -1 2 -3.0 4.0)").unwrap(),
+            Val::Float(2.0)
+        );
     }
 
     #[test]
     fn minus_with_no_args_returns_error() {
         let mut vm = Vm::default();
         assert_eq!(
-            vm.eval_str("(-)"),
+            vm.clean_eval_str("(-)"),
             Err(VmError::WrongArity {
                 expected: 1,
                 actual: 0
@@ -131,54 +137,63 @@ mod tests {
     #[test]
     fn minus_with_int_negates() {
         let mut vm = Vm::default();
-        assert_eq!(vm.eval_str("(- 1)").unwrap(), Val::Int(-1));
+        assert_eq!(vm.clean_eval_str("(- 1)").unwrap(), Val::Int(-1));
     }
 
     #[test]
     fn minus_with_float_negates() {
         let mut vm = Vm::default();
-        assert_eq!(vm.eval_str("(- 1.0)").unwrap(), Val::Float(-1.0));
+        assert_eq!(vm.clean_eval_str("(- 1.0)").unwrap(), Val::Float(-1.0));
     }
 
     #[test]
     fn minus_with_multiple_args_subtracts() {
         let mut vm = Vm::default();
-        assert_eq!(vm.eval_str("(- 1 2 3)").unwrap(), Val::Int(-4));
+        assert_eq!(vm.clean_eval_str("(- 1 2 3)").unwrap(), Val::Int(-4));
     }
 
     #[test]
     fn minus_with_multiple_floats_subtracts() {
         let mut vm = Vm::default();
-        assert_eq!(vm.eval_str("(- 1.0 2.0 3.0)").unwrap(), Val::Float(-4.0));
+        assert_eq!(
+            vm.clean_eval_str("(- 1.0 2.0 3.0)").unwrap(),
+            Val::Float(-4.0)
+        );
     }
 
     #[test]
     fn minus_with_mixed_ints_and_floats_returns_float() {
         let mut vm = Vm::default();
-        assert_eq!(vm.eval_str("(- 1 2.0 3)").unwrap(), Val::Float(-4.0));
+        assert_eq!(vm.clean_eval_str("(- 1 2.0 3)").unwrap(), Val::Float(-4.0));
     }
 
     #[test]
     fn empty_less_is_true() {
         let mut vm = Vm::default();
-        assert_eq!(vm.eval_str("(<)").unwrap(), Val::Bool(true));
+        assert_eq!(vm.clean_eval_str("(<)").unwrap(), Val::Bool(true));
     }
 
     #[test]
     fn less_with_ordered_numbers_returns_true() {
         let mut vm = Vm::default();
-        assert_eq!(vm.eval_str("(< -10 0.2 10)").unwrap(), Val::Bool(true));
+        assert_eq!(
+            vm.clean_eval_str("(< -10 0.2 10)").unwrap(),
+            Val::Bool(true)
+        );
     }
 
     #[test]
     fn less_with_equal_numbers_returns_false() {
         let mut vm = Vm::default();
-        assert_eq!(vm.eval_str("(< -10 0.2 0.2 10)").unwrap(), Val::Bool(false));
+        assert_eq!(
+            vm.clean_eval_str("(< -10 0.2 0.2 10)").unwrap(),
+            Val::Bool(false)
+        );
     }
 
     #[test]
     fn less_with_non_number_returns_error() {
         let mut vm = Vm::default();
-        assert_eq!(vm.eval_str("(< false true)"), Err(VmError::WrongType));
+        assert_eq!(vm.clean_eval_str("(< false true)"), Err(VmError::WrongType));
     }
 }

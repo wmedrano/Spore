@@ -62,7 +62,7 @@ impl<'a> BufferWidget<'a> {
     }
 }
 
-impl<'a> Widget for BufferWidget<'a> {
+impl Widget for BufferWidget<'_> {
     fn render(self, area: Rect, buf: &mut Buffer) {
         self.render_text(area, buf);
     }

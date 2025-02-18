@@ -23,7 +23,7 @@ impl NativeFunction {
     /// Creates a new native function that takes no arguments.
     pub fn new<F: 'static + Fn(&mut Vm) -> VmResult<Val>>(name: &str, f: F) -> NativeFunction {
         NativeFunction {
-            name: CompactString::new(name),
+            name: name.into(),
             f: SporeRc::new(f),
         }
     }

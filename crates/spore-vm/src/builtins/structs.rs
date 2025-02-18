@@ -60,7 +60,11 @@ mod tests {
     #[test]
     fn struct_with_no_args_returns_empty_struct() {
         let mut vm = Vm::default();
-        let got = vm.eval_str("(struct)").unwrap().as_struct(&vm).unwrap();
+        let got = vm
+            .clean_eval_str("(struct)")
+            .unwrap()
+            .as_struct(&vm)
+            .unwrap();
         assert_eq!(got, &SporeStruct::new());
     }
 
@@ -70,7 +74,7 @@ mod tests {
         let val_sym1 = vm.make_symbol_id("test");
         let val_sym2 = vm.make_symbol_id("test2");
         let got = vm
-            .eval_str("(struct 'test 1 'test2 2)")
+            .clean_eval_str("(struct 'test 1 'test2 2)")
             .unwrap()
             .as_struct(&vm)
             .unwrap();
@@ -83,9 +87,10 @@ mod tests {
     #[test]
     fn struct_get_returns_element_at_key() {
         let mut vm = Vm::default();
-        vm.eval_str("(define s (struct 'test 1 'test2 2))").unwrap();
+        vm.clean_eval_str("(define s (struct 'test 1 'test2 2))")
+            .unwrap();
         let val_sym = vm.make_symbol("test");
-        assert_eq!(vm.eval_str("struct-get s 'test"), Ok(val_sym));
+        assert_eq!(vm.clean_eval_str("struct-get s 'test"), Ok(val_sym));
     }
 
     #[test]
@@ -93,10 +98,11 @@ mod tests {
         let mut vm = Vm::default();
         let val_sym1 = vm.make_symbol_id("test");
         let val_sym2 = vm.make_symbol_id("test2");
-        vm.eval_str("(define s (struct 'test 1 'test2 2))").unwrap();
-        assert_eq!(vm.eval_str("(struct-set! s 'test 10)"), Ok(Val::Void));
+        vm.clean_eval_str("(define s (struct 'test 1 'test2 2))")
+            .unwrap();
+        assert_eq!(vm.clean_eval_str("(struct-set! s 'test 10)"), Ok(Val::Void));
         assert_eq!(
-            vm.eval_str("s").unwrap().as_struct(&vm).unwrap(),
+            vm.clean_eval_str("s").unwrap().as_struct(&vm).unwrap(),
             &SporeStruct::from_iter(
                 [(val_sym1, Val::Int(10)), (val_sym2, Val::Int(2))].into_iter()
             )
@@ -106,9 +112,10 @@ mod tests {
     #[test]
     fn struct_get_returns_error_if_key_not_found() {
         let mut vm = Vm::default();
-        vm.eval_str("(define s (struct 'test 1 'test2 2))").unwrap();
+        vm.clean_eval_str("(define s (struct 'test 1 'test2 2))")
+            .unwrap();
         assert_eq!(
-            vm.eval_str("(struct-get s 'test3)"),
+            vm.clean_eval_str("(struct-get s 'test3)"),
             Err(VmError::Custom("key not found".into()))
         );
     }
@@ -116,11 +123,15 @@ mod tests {
     #[test]
     fn struct_set_returns_error_if_wrong_type() {
         let mut vm = Vm::default();
-        vm.eval_str("(define s (struct 'test 1 'test2 2))").unwrap();
+        vm.clean_eval_str("(define s (struct 'test 1 'test2 2))")
+            .unwrap();
         assert_eq!(
-            vm.eval_str("(struct-set! 1 'test3 3)"),
+            vm.clean_eval_str("(struct-set! 1 'test3 3)"),
             Err(VmError::WrongType)
         );
-        assert_eq!(vm.eval_str("(struct-set! s 4 3)"), Err(VmError::WrongType));
+        assert_eq!(
+            vm.clean_eval_str("(struct-set! s 4 3)"),
+            Err(VmError::WrongType)
+        );
     }
 }
