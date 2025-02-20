@@ -159,6 +159,8 @@ pub struct Objects {
     pub bytecode_functions: TypedObjectStore<ByteCodeFunction>,
     /// The store for custom objects.
     pub custom: TypedObjectStore<SporeCustom>,
+    /// The store for box objects.
+    pub boxes: TypedObjectStore<Val>,
     /// The symbol table.
     pub symbols: SymbolTable,
     /// The null bytecode function.
@@ -189,6 +191,10 @@ impl Objects {
         self.custom.register(custom, self.reachable_color.swap())
     }
 
+    pub fn register_box(&mut self, v: Val) -> ObjectId<Val> {
+        self.boxes.register(v, self.reachable_color.swap())
+    }
+
     pub fn get_str(&self, string_id: ObjectId<CompactString>) -> Option<&str> {
         self.strings.get(string_id).map(CompactString::as_str)
     }
@@ -211,6 +217,14 @@ impl Objects {
 
     pub fn get_custom_mut(&mut self, custom_id: ObjectId<SporeCustom>) -> Option<&mut SporeCustom> {
         self.custom.get_mut(custom_id)
+    }
+
+    pub fn get_box(&self, box_id: ObjectId<Val>) -> Option<Val> {
+        self.boxes.get(box_id).copied()
+    }
+
+    pub fn get_box_mut(&mut self, box_id: ObjectId<Val>) -> Option<&mut Val> {
+        self.boxes.get_mut(box_id)
     }
 
     /// Runs garbage collection.
@@ -311,6 +325,11 @@ impl Objects {
                     for val in obj.references() {
                         queue.push(*val);
                     }
+                }
+            }
+            Val::Box(id) => {
+                if let Some(v) = self.boxes.maybe_color(id, self.reachable_color) {
+                    queue.push(*v);
                 }
             }
             Val::Void

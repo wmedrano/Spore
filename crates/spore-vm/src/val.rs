@@ -67,6 +67,8 @@ pub enum Val {
     BytecodeFunction(ObjectId<ByteCodeFunction>),
     /// Contains a custom object.
     Custom(ObjectId<SporeCustom>),
+    /// Holds a mutable value.
+    Box(ObjectId<Val>),
     /// Contains a datatype.
     DataType(DataType),
 }
@@ -84,10 +86,11 @@ pub enum DataType {
     Function,
     DataType,
     Custom,
+    Box,
 }
 
 impl Val {
-    /// Creates a formatter for the value.
+    /// Creates a formatter for pretty printing the value.
     pub fn formatted(self, vm: &Vm) -> ValFormatter {
         ValFormatter { vm, val: self }
     }
@@ -97,10 +100,12 @@ impl Val {
         !matches!(self, Val::Bool(false) | Val::Void)
     }
 
+    /// Returns `true` if the value is void.
     pub fn is_void(self) -> bool {
         matches!(self, Val::Void)
     }
 
+    /// Returns the value as an `i64` or `None` if the value is not an int.
     pub fn as_int(self) -> Option<i64> {
         match self {
             Val::Int(x) => Some(x),
@@ -108,6 +113,7 @@ impl Val {
         }
     }
 
+    /// Returns the value as a `str` or `None` if value is not a string.
     pub fn as_str<'a>(&'a self, vm: &'a Vm) -> Option<&'a str> {
         match self {
             Val::String(string_id) => vm.objects.get_str(*string_id),
@@ -116,6 +122,7 @@ impl Val {
         }
     }
 
+    /// Returns the inner custom value or `None` if the value does not contain a custom value.
     pub fn as_custom<T: SporeCustomType>(self, vm: &Vm) -> Option<&T> {
         match self {
             Val::Custom(id) => {
@@ -126,6 +133,8 @@ impl Val {
         }
     }
 
+    /// Returns a mutable reference to the inner custom value or `None` if the value does not
+    /// contain a custom value.
     pub fn as_custom_mut<T: SporeCustomType>(self, vm: &mut Vm) -> Option<&mut T> {
         match self {
             Val::Custom(id) => {
@@ -136,6 +145,7 @@ impl Val {
         }
     }
 
+    /// Returns the underlying list or `None` if the value is not a list.
     pub fn as_list(self, vm: &Vm) -> Option<&SporeList> {
         match self {
             Val::List(object_id) => vm.objects.get_list(object_id),
@@ -143,6 +153,7 @@ impl Val {
         }
     }
 
+    /// Returns the underlying struct or `None` if the value is not a struct.
     pub fn as_struct(self, vm: &Vm) -> Option<&SporeStruct> {
         match self {
             Val::Struct(object_id) => vm.objects.get_struct(object_id),
@@ -150,6 +161,7 @@ impl Val {
         }
     }
 
+    /// Returns the underlying mutable struct reference or `None` if the value is not a struct.
     pub fn as_struct_mut(self, vm: &mut Vm) -> Option<&mut SporeStruct> {
         match self {
             Val::Struct(object_id) => vm.objects.get_struct_mut(object_id),
@@ -157,6 +169,7 @@ impl Val {
         }
     }
 
+    /// Returns the symbol id or `None` if the value is not a symbol.
     pub fn as_symbol_id(self) -> Option<SymbolId> {
         match self {
             Val::Symbol(x) => Some(x),
@@ -164,6 +177,33 @@ impl Val {
         }
     }
 
+    /// Returns `true` if the value is a box.
+    pub fn is_box(self) -> bool {
+        matches!(self, Val::Box(_))
+    }
+
+    /// Returns the underlying box value or `None` if the value is not a box.
+    pub fn unbox(self, vm: &Vm) -> Option<Val> {
+        match self {
+            Val::Box(id) => vm.objects.get_box(id),
+            _ => None,
+        }
+    }
+
+    /// Returns a mutable reference to the underlying box value or `None` if the value is not a box.
+    pub fn unbox_mut(self, vm: &mut Vm) -> Option<&mut Val> {
+        match self {
+            Val::Box(id) => vm.objects.get_box_mut(id),
+            _ => None,
+        }
+    }
+
+    /// Return the underlying boxed value. If the value is not a box, then it is returned.
+    pub fn maybe_unbox(self, vm: &Vm) -> Val {
+        self.unbox(vm).unwrap_or(self)
+    }
+
+    /// Get the type of the value.
     pub fn spore_type(self) -> DataType {
         match self {
             Val::Void => DataType::Void,
@@ -178,6 +218,7 @@ impl Val {
             Val::NativeFunction(_) => DataType::Function,
             Val::BytecodeFunction(_) => DataType::Function,
             Val::Custom(_) => DataType::Custom,
+            Val::Box(_) => DataType::Box,
             Val::DataType(_) => DataType::DataType,
         }
     }
@@ -283,6 +324,10 @@ impl ValFormatter<'_> {
                 Some(obj) => write!(f, "(custom-object-{})", obj.name()),
                 None => write!(f, "(gc-custom-object)"),
             },
+            Val::Box(object_id) => match self.vm.objects.boxes.get(object_id) {
+                Some(obj) => write!(f, "(box {})", obj.formatted(self.vm)),
+                None => write!(f, "(box unknown-gc-val)"),
+            },
             Val::DataType(dt) => match dt {
                 DataType::Void => write!(f, "(type-void)"),
                 DataType::Bool => write!(f, "(type-bool)"),
@@ -295,6 +340,7 @@ impl ValFormatter<'_> {
                 DataType::Function => write!(f, "(type-function)"),
                 DataType::DataType => write!(f, "(type-type)"),
                 DataType::Custom => write!(f, "(type-custom)"),
+                DataType::Box => write!(f, "(type-box)"),
             },
         }
     }

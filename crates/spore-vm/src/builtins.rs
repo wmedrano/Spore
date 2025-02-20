@@ -1,3 +1,4 @@
+mod boxes;
 mod lists;
 mod math;
 mod strings;
@@ -30,6 +31,7 @@ pub fn register_builtins(vm: &mut Vm) {
     .apply_mut(math::register)
     .apply_mut(strings::register)
     .apply_mut(lists::register)
+    .apply_mut(boxes::register)
     .apply_mut(structs::register);
 }
 

@@ -168,6 +168,11 @@ impl Vm {
         Val::List(lst)
     }
 
+    pub fn make_box(&mut self, value: Val) -> Val {
+        let b = self.objects.register_box(value);
+        Val::Box(b)
+    }
+
     /// Make a new struct.
     pub fn make_struct(&mut self, strct: impl Into<SporeStruct>) -> Val {
         let strct = self.objects.register_struct(strct.into());
