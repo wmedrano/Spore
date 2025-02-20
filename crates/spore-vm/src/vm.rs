@@ -24,7 +24,7 @@ use crate::{
 /// The Vm struct represents the virtual machine that executes bytecode.
 pub struct Vm {
     pub(crate) globals: Module,
-    stack: Vec<Val>,
+    pub(crate) stack: Vec<Val>,
     stack_frame: StackFrame,
     previous_stack_frames: Vec<StackFrame>,
     /// The object store.
@@ -333,7 +333,7 @@ impl Vm {
         while self.previous_stack_frames.len() != stop_stack_frame {
             self.run_next()?;
         }
-        let res = self.stack.last().cloned().expect("Value should exist");
+        let res = self.stack.pop().expect("Value should exist");
         Ok(res)
     }
 

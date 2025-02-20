@@ -5,6 +5,9 @@ use crate::{
 
 pub fn register(vm: &mut Vm) {
     vm.register_native_function(NativeFunction::new("list", list_fn))
+        .register_native_function(NativeFunction::with_args_2("doall", doall_fn))
+        .register_native_function(NativeFunction::with_args_2("map", map_fn))
+        .register_native_function(NativeFunction::with_args_2("filter", filter_fn))
         .register_native_function(NativeFunction::with_args_1("list-len", list_len_fn))
         .register_native_function(NativeFunction::with_args_2("nth", nth_fn));
 }
@@ -12,6 +15,43 @@ pub fn register(vm: &mut Vm) {
 fn list_fn(vm: &mut Vm) -> VmResult<Val> {
     let args = vm.args().to_vec();
     Ok(vm.make_list(args))
+}
+
+fn doall_fn(vm: &mut Vm, f: Val, lst: Val) -> VmResult<Val> {
+    let len = list_len_fn(vm, lst)?.as_int().unwrap();
+    for idx in 0..len {
+        let element = nth_fn(vm, lst, Val::Int(idx))?;
+        vm.eval_function(f, &[element])?;
+    }
+    Ok(Val::Void)
+}
+
+fn map_fn(vm: &mut Vm, f: Val, lst: Val) -> VmResult<Val> {
+    let len = list_len_fn(vm, lst)?.as_int().unwrap();
+    let new_list_start = vm.stack.len();
+    for idx in 0..len {
+        let element = nth_fn(vm, lst, Val::Int(idx))?;
+        let res = vm.eval_function(f, &[element])?;
+        // TODO: Store this somewhere else instead of polluting the stack.
+        vm.stack.push(res);
+    }
+    let ret = Vec::from_iter(vm.stack.drain(new_list_start..));
+    Ok(vm.make_list(ret))
+}
+
+fn filter_fn(vm: &mut Vm, pred: Val, lst: Val) -> VmResult<Val> {
+    let len = list_len_fn(vm, lst)?.as_int().unwrap();
+    let new_list_start = vm.stack.len();
+    for idx in 0..len {
+        let element = nth_fn(vm, lst, Val::Int(idx))?;
+        let should_keep = vm.eval_function(pred, &[element])?.is_truthy();
+        if should_keep {
+            // TODO: Store this somewhere else instead of polluting the stack.
+            vm.stack.push(element);
+        }
+    }
+    let ret = Vec::from_iter(vm.stack.drain(new_list_start..));
+    Ok(vm.make_list(ret))
 }
 
 fn list_len_fn(vm: &mut Vm, lst: Val) -> VmResult<Val> {
@@ -74,6 +114,46 @@ mod tests {
         assert_eq!(
             got.as_list(&vm).unwrap(),
             &[Val::Int(1), Val::Float(2.0), Val::Bool(true)]
+        );
+    }
+
+    #[test]
+    fn map_on_empty_list_returns_empty_list() {
+        let mut vm = Vm::default();
+        vm.clean_eval_str("(define (double x) (+ x x))").unwrap();
+        let got = vm.clean_eval_str("(map double (list))").unwrap();
+        assert_eq!(got.as_list(&vm).unwrap(), &[]);
+    }
+
+    #[test]
+    fn map_applies_fn_to_all_elements() {
+        let mut vm = Vm::default();
+        vm.clean_eval_str("(define (double x) (+ x x))").unwrap();
+        let got = vm.clean_eval_str("(map double (list 1 2 3))").unwrap();
+        assert_eq!(
+            got.as_list(&vm).unwrap(),
+            &[Val::Int(2), Val::Int(4), Val::Int(6)]
+        );
+    }
+
+    #[test]
+    fn filter_on_empty_list_returns_empty_list() {
+        let mut vm = Vm::default();
+        vm.clean_eval_str("(define (zero? x) (= x 0))").unwrap();
+        let got = vm.clean_eval_str("(filter zero? (list))").unwrap();
+        assert_eq!(got.as_list(&vm).unwrap(), &[]);
+    }
+
+    #[test]
+    fn filter_keeps_only_elements_that_pass_predicate() {
+        let mut vm = Vm::default();
+        vm.clean_eval_str("(define (zero? x) (= 0 x))").unwrap();
+        let got = vm
+            .clean_eval_str("(filter zero? (list 0 1 0 2 0 3))")
+            .unwrap();
+        assert_eq!(
+            got.as_list(&vm).unwrap(),
+            &[Val::Int(0), Val::Int(0), Val::Int(0)]
         );
     }
 
