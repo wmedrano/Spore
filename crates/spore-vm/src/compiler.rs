@@ -177,6 +177,13 @@ impl Compiler<'_> {
                 dst[condition_jump] = Instruction::JumpIf(false_end - false_start);
                 dst[jump] = Instruction::Jump(true_end - true_start);
             }
+            Ir::MultiExpr { exprs } => {
+                self.compile(dst, &Ir::Deref("do"));
+                for expr in exprs.iter() {
+                    self.compile(dst, expr);
+                }
+                dst.push(Instruction::Eval(1 + exprs.len()));
+            }
             Ir::Return { expr } => {
                 self.compile(dst, expr);
                 dst.push(Instruction::Return);

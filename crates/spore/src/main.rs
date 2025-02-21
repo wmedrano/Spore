@@ -28,6 +28,13 @@ pub enum Mode {
     Repl,
 }
 
+#[derive(Default, Debug)]
+pub struct Stats {
+    frames_rendered: usize,
+    gc_invocations: usize,
+    objects_sweeped: usize,
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
     let mut vm = Vm::default()
@@ -39,13 +46,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let terminal = ratatui::init();
             let result = run(&mut vm, terminal);
             ratatui::restore();
-            result
+            println!("{stats:#?}", stats = result?);
         }
         Mode::Repl => {
             spore_repl::Repl::new(vm).run()?;
-            Ok(())
         }
     }
+    Ok(())
 }
 
 #[derive(Copy, Clone)]
@@ -53,7 +60,7 @@ pub struct Symbols {
     buffer: SymbolId,
     cursor: SymbolId,
     exit_p: SymbolId,
-    screen: SymbolId,
+    windows: SymbolId,
 }
 
 impl Symbols {
@@ -62,56 +69,54 @@ impl Symbols {
             buffer: vm.make_symbol_id("buffer"),
             cursor: vm.make_symbol_id("cursor"),
             exit_p: vm.make_symbol_id("exit?"),
-            screen: vm.make_symbol_id("screen"),
+            windows: vm.make_symbol_id("windows"),
         }
     }
 }
 
-fn run(vm: &mut Vm, mut terminal: DefaultTerminal) -> Result<(), Box<dyn std::error::Error>> {
+fn run(vm: &mut Vm, mut terminal: DefaultTerminal) -> Result<Stats, Box<dyn std::error::Error>> {
     let symbols = Symbols::new(vm);
+    let mut stats = Stats::default();
     vm.clean_eval_str(include_str!("main.lisp")).unwrap();
     while !vm
         .get_global(symbols.exit_p)
         .unwrap_or_default()
         .is_truthy()
     {
-        vm.run_gc();
+        if stats.frames_rendered % 10 == 0 {
+            stats.objects_sweeped += vm.run_gc();
+            stats.gc_invocations += 1;
+        }
         terminal.draw(|frame: &mut Frame| {
             draw(frame, vm, &symbols);
+            stats.frames_rendered += 1;
         })?;
         handle_events(vm);
     }
-    Ok(())
+    Ok(stats)
 }
 
 fn handle_events(vm: &mut Vm) {
-    vm.set_global_by_name("tmp-event", Val::Void);
     for event in events::events(Duration::from_secs(1)) {
+        let f = vm.get_global_by_name("handle-event!").unwrap();
         let s = vm.make_string(event.clone());
-        vm.set_global_by_name("tmp-event", s);
-        vm.clean_eval_str("(handle-event! tmp-event)").unwrap();
+        vm.clean_eval_function(f, &[s]).unwrap();
     }
 }
 
 fn draw(frame: &mut Frame, vm: &Vm, symbols: &Symbols) {
-    let cursor = vm
-        .get_global(symbols.cursor)
-        .unwrap_or(Val::Int(0))
-        .as_int()
-        .unwrap() as usize;
-
     frame.render_widget(ratatui::widgets::Clear, frame.area());
-    let screen = vm.get_global(symbols.screen).unwrap().as_list(vm).unwrap();
-    for widget in screen {
-        let widget_struct = widget.as_struct(vm).unwrap();
-        let text_buffer = widget_struct
+    let windows = vm.get_global(symbols.windows).unwrap().as_list(vm).unwrap();
+    for window in windows {
+        let window_struct = window.as_struct(vm).unwrap();
+        let text_buffer = window_struct
             .get(&symbols.buffer)
             .unwrap()
             .as_custom(vm)
             .unwrap();
-        let cursor = widget_struct
+        let cursor = window_struct
             .get(&symbols.cursor)
-            .unwrap_or(&Val::Int(cursor as i64))
+            .unwrap_or(&Val::Int(0 as i64))
             .as_int()
             .unwrap();
         let cursor = if cursor < 0 { 0 } else { cursor as usize };

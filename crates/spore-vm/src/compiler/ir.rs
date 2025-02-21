@@ -5,7 +5,7 @@ use super::{ast::Ast, span::Span};
 type BumpVec<'a, T> = bumpalo::collections::Vec<'a, T>;
 
 /// Represents the intermediate representation of the code.
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Ir<'a> {
     /// A constant value.
     Constant(Constant<'a>),
@@ -30,12 +30,14 @@ pub enum Ir<'a> {
         true_branch: &'a Ir<'a>,
         false_branch: &'a Ir<'a>,
     },
+    /// Evaluate multiple expressions but return only the last one.
+    MultiExpr { exprs: &'a [Self] },
     /// An early return expression.
     Return { expr: &'a Ir<'a> },
 }
 
 /// Represents a constant value.
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Constant<'a> {
     /// A void constant.
     Void,
@@ -92,6 +94,7 @@ pub enum IrError {
     EmptyFunctionCall(Span),
     ConstantNotCallable(Span),
     BadDefine(Span),
+    BadWhen(Span),
     BadLambda(Span),
     BadIf(Span),
     DefineExpectedIdentifierButFoundConstant(Span),
@@ -108,6 +111,7 @@ impl std::fmt::Display for IrError {
             IrError::BadDefine(span) => write!(f, "bad define at {span}"),
             IrError::BadLambda(span) => write!(f, "bad lambda at {span}"),
             IrError::BadIf(span) => write!(f, "bad if at {span}"),
+            IrError::BadWhen(span) => write!(f, "bad when at {span}"),
             IrError::DefineExpectedIdentifierButFoundConstant(span) => {
                 write!(f, "define expected identifier but found constant at {span}")
             }
@@ -157,6 +161,13 @@ impl std::fmt::Display for IrErrorWithContext<'_> {
             ),
             IrError::BadIf(span) => {
                 write!(f, "bad if at {span}: {text}", text = span.text(self.source))
+            }
+            IrError::BadWhen(span) => {
+                write!(
+                    f,
+                    "bad when at {span}: {text}",
+                    text = span.text(self.source)
+                )
             }
             IrError::DefineExpectedIdentifierButFoundConstant(span) => {
                 write!(
@@ -235,6 +246,10 @@ impl<'a> IrBuilder<'a> {
                 }
                 [_if, pred, true_branch] => self.build_if(pred, true_branch, None),
                 _ => Err(IrError::BadLambda(span)),
+            },
+            Some((_, ParsedText::Identifier("when"))) => match children {
+                [_when, pred, exprs @ ..] => self.build_when(pred, exprs),
+                _ => Err(IrError::BadWhen(span)),
             },
             Some((_, ParsedText::Identifier("return"))) => match children {
                 [_return] => self.build_return(None),
@@ -374,6 +389,22 @@ impl<'a> IrBuilder<'a> {
             pred,
             true_branch,
             false_branch,
+        })
+    }
+
+    /// Builds a when Ir.
+    fn build_when(&self, pred: &Ast, exprs_ast: &[Ast]) -> Result<Ir<'a>, IrError> {
+        let pred = self.arena.alloc(self.build(pred)?);
+        let exprs = self
+            .arena
+            .alloc_slice_fill_clone(exprs_ast.len(), &Ir::Constant(Constant::Void));
+        for (ast, out) in exprs_ast.iter().zip(exprs.iter_mut()) {
+            *out = self.build(ast)?;
+        }
+        Ok(Ir::If {
+            pred,
+            true_branch: self.arena.alloc(Ir::MultiExpr { exprs }),
+            false_branch: &Ir::Constant(Constant::Void),
         })
     }
 

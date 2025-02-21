@@ -298,6 +298,12 @@ impl From<AstError> for VmError {
 }
 
 impl Vm {
+    /// Evaluates the function `f` with `args`.
+    pub fn clean_eval_function(&mut self, f: Val, args: &[Val]) -> VmResult<Val> {
+        self.stack.clear();
+        self.eval_function(f, args)
+    }
+
     /// Evaluates a string of Spore code.
     ///
     /// Note: This should not be used in a Spore Native Function as it resets the evaluation.
@@ -315,7 +321,6 @@ impl Vm {
     ///
     /// Note: This should not be used in a Spore Native Function as it resets the evaluation.
     pub fn clean_eval_ast(&mut self, s: &str, ast: &Ast) -> VmResult<Val> {
-        self.run_gc();
         self.stack.clear();
         let bytecode = ByteCodeFunction::new(self, s, ast, &Bump::new())?;
         let bytecode_id = self.objects.register_bytecode(bytecode);
@@ -475,14 +480,14 @@ impl Vm {
 
 impl Vm {
     /// Run the garbage collector.
-    pub fn run_gc(&mut self) {
+    pub fn run_gc(&mut self) -> usize {
         self.objects.run_gc(
             &self.stack,
             self.previous_stack_frames
                 .iter()
                 .chain(std::iter::once(&self.stack_frame)),
             std::iter::once(&self.globals),
-        );
+        )
     }
 }
 

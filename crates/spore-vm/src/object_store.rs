@@ -124,8 +124,10 @@ impl<T> TypedObjectStore<T> {
     }
 
     /// Sweeps objects of a specific color from the store.
-    pub fn sweep_color(&mut self, color: GcColor) {
-        self.id_to_object.retain(|_, v| v.color != color)
+    pub fn sweep_color(&mut self, color: GcColor) -> usize {
+        let before = self.id_to_object.len();
+        self.id_to_object.retain(|_, v| v.color != color);
+        before - self.id_to_object.len()
     }
 }
 
@@ -235,9 +237,9 @@ impl Objects {
         stack: &[Val],
         stack_frames: impl Iterator<Item = &'a StackFrame>,
         modules: impl Iterator<Item = &'a Module>,
-    ) {
+    ) -> usize {
         self.mark(stack, stack_frames, modules);
-        self.sweep();
+        self.sweep()
     }
 
     /// Marks reachable objects during garbage collection.
@@ -357,14 +359,14 @@ impl Objects {
     /// Sweeps the object store to collect garbage.
     ///
     /// This function sweeps the object store, collecting any objects that are not marked with the current reachable color.
-    fn sweep(&mut self) {
+    fn sweep(&mut self) -> usize {
         self.reachable_color = self.reachable_color.swap();
-        self.strings.sweep_color(self.reachable_color);
-        self.lists.sweep_color(self.reachable_color);
-        self.structs.sweep_color(self.reachable_color);
-        self.native_functions.sweep_color(self.reachable_color);
-        self.bytecode_functions.sweep_color(self.reachable_color);
-        self.custom.sweep_color(self.reachable_color);
+        self.strings.sweep_color(self.reachable_color)
+            + self.lists.sweep_color(self.reachable_color)
+            + self.structs.sweep_color(self.reachable_color)
+            + self.native_functions.sweep_color(self.reachable_color)
+            + self.bytecode_functions.sweep_color(self.reachable_color)
+            + self.custom.sweep_color(self.reachable_color)
     }
 }
 
