@@ -53,7 +53,7 @@ pub enum Constant<'a> {
     String(&'a str),
 }
 
-pub enum ParsedText<'a> {
+enum ParsedText<'a> {
     Comment,
     Constant(Constant<'a>),
     Identifier(&'a str),
@@ -62,29 +62,59 @@ pub enum ParsedText<'a> {
 impl<'a> ParsedText<'a> {
     /// Creates a new `ParsedText`.
     fn new(text: &'a str) -> Self {
-        if text == "true" {
-            return ParsedText::Constant(Constant::Bool(true));
-        } else if text == "false" {
-            return ParsedText::Constant(Constant::Bool(false));
+        Self::new_comment(text)
+            .or_else(|| Self::new_bool(text))
+            .or_else(|| Self::new_number(text))
+            .or_else(|| Self::new_string(text))
+            .or_else(|| Self::new_symbol(text))
+            .unwrap_or(ParsedText::Identifier(text))
+    }
+
+    fn new_bool(text: &'a str) -> Option<Self> {
+        match text {
+            "true" => Some(ParsedText::Constant(Constant::Bool(true))),
+            "false" => Some(ParsedText::Constant(Constant::Bool(false))),
+            _ => None,
         }
+    }
+
+    fn new_number(text: &'a str) -> Option<Self> {
         let leading_char = text.chars().next().unwrap_or(' ');
-        if leading_char == '-' || leading_char.is_ascii_digit() {
-            if let Ok(x) = text.parse() {
-                return ParsedText::Constant(Constant::Int(x));
-            }
-            if let Ok(x) = text.parse() {
-                return ParsedText::Constant(Constant::Float(x));
-            }
-        } else if leading_char == ';' {
-            return ParsedText::Comment;
+        if leading_char != '-' && !leading_char.is_ascii_digit() {
+            return None;
         }
+        if let Ok(x) = text.parse() {
+            return Some(ParsedText::Constant(Constant::Int(x)));
+        }
+        if let Ok(x) = text.parse() {
+            return Some(ParsedText::Constant(Constant::Float(x)));
+        }
+        None
+    }
+
+    fn new_comment(text: &'a str) -> Option<Self> {
+        if text.chars().next() == Some(';') {
+            return Some(ParsedText::Comment);
+        } else {
+            None
+        }
+    }
+
+    fn new_string(text: &'a str) -> Option<Self> {
         if text.starts_with('"') && text.ends_with('"') && text.len() > 1 {
-            return ParsedText::Constant(Constant::String(&text[1..text.len() - 1]));
+            Some(ParsedText::Constant(Constant::String(
+                &text[1..text.len() - 1],
+            )))
+        } else {
+            None
         }
+    }
+
+    fn new_symbol(text: &'a str) -> Option<Self> {
         if let Some(stripped) = text.strip_prefix('\'') {
-            return ParsedText::Constant(Constant::Symbol(stripped));
+            return Some(ParsedText::Constant(Constant::Symbol(stripped)));
         }
-        ParsedText::Identifier(text)
+        None
     }
 }
 
@@ -187,13 +217,24 @@ impl std::fmt::Display for IrErrorWithContext<'_> {
 
 impl<'a> Ir<'a> {
     /// Creates an IR from an AST.
-    pub fn with_ast(source: &'a str, ast: &Ast, arena: &'a Bump) -> Result<Ir<'a>, IrError> {
-        match ast.with_stripped_comments(source) {
-            Some(stripped_ast) => {
+    pub fn with_ast<'b>(
+        source: &'a str,
+        asts: impl Iterator<Item = &'b Ast>,
+        arena: &'a Bump,
+    ) -> Result<Ir<'a>, IrError> {
+        let mut irs = Vec::with_capacity(asts.size_hint().1.unwrap_or(0));
+        for ast in asts {
+            if let Some(stripped_ast) = ast.with_stripped_comments(source) {
                 let builder = IrBuilder { source, arena };
-                builder.build(&stripped_ast)
+                irs.push(builder.build(&stripped_ast)?);
             }
-            None => Ok(Ir::Constant(Constant::Void)),
+        }
+        match irs.len() {
+            0 => Ok(Ir::Constant(Constant::Void)),
+            1 => Ok(irs.pop().unwrap()),
+            _ => Ok(Ir::MultiExpr {
+                exprs: arena.alloc_slice_fill_iter(irs.into_iter()),
+            }),
         }
     }
 }
@@ -433,9 +474,8 @@ mod tests {
     fn build_function_call_produces_function_call() {
         let arena = Bump::new();
         let source = "(add 1 2)";
-        let ast = Ast::with_source(source).unwrap()[0].clone();
-        let ir = Ir::with_ast(source, &ast, &arena).unwrap();
-
+        let ast = Ast::with_source(source).unwrap();
+        let ir = Ir::with_ast(source, ast.iter(), &arena).unwrap();
         assert_eq!(
             ir,
             Ir::FunctionCall {
@@ -452,8 +492,8 @@ mod tests {
     fn number_produces_constant_int() {
         let arena = Bump::new();
         let source = "123";
-        let ast = Ast::with_source(source).unwrap()[0].clone();
-        let ir = Ir::with_ast(source, &ast, &arena).unwrap();
+        let ast = Ast::with_source(source).unwrap();
+        let ir = Ir::with_ast(source, ast.iter(), &arena).unwrap();
         assert_eq!(ir, Ir::Constant(Constant::Int(123)));
     }
 
@@ -461,8 +501,8 @@ mod tests {
     fn number_with_decimals_produces_constant_float() {
         let arena = Bump::new();
         let source = "123.45";
-        let ast = Ast::with_source(source).unwrap()[0].clone();
-        let ir = Ir::with_ast(source, &ast, &arena).unwrap();
+        let ast = Ast::with_source(source).unwrap();
+        let ir = Ir::with_ast(source, ast.iter(), &arena).unwrap();
         assert_eq!(ir, Ir::Constant(Constant::Float(123.45)));
     }
 
@@ -470,8 +510,8 @@ mod tests {
     fn symbol_produces_constant_symbol() {
         let arena = Bump::new();
         let source = "\'hello";
-        let ast = Ast::with_source(source).unwrap()[0].clone();
-        let ir = Ir::with_ast(source, &ast, &arena).unwrap();
+        let ast = Ast::with_source(source).unwrap();
+        let ir = Ir::with_ast(source, ast.iter(), &arena).unwrap();
         assert_eq!(ir, Ir::Constant(Constant::Symbol("hello")));
     }
 
@@ -479,8 +519,8 @@ mod tests {
     fn double_quotes_produces_constant_string() {
         let arena = Bump::new();
         let source = "\"hello world\"";
-        let ast = Ast::with_source(source).unwrap()[0].clone();
-        let ir = Ir::with_ast(source, &ast, &arena).unwrap();
+        let ast = Ast::with_source(source).unwrap();
+        let ir = Ir::with_ast(source, ast.iter(), &arena).unwrap();
         assert_eq!(ir, Ir::Constant(Constant::String("hello world")));
     }
 
@@ -488,9 +528,9 @@ mod tests {
     fn identifier_produces_deref() {
         let arena = Bump::new();
         let source = "hello";
-        let ast = Ast::with_source(source).unwrap()[0].clone();
+        let ast = Ast::with_source(source).unwrap();
 
-        let ir = Ir::with_ast(source, &ast, &arena).unwrap();
+        let ir = Ir::with_ast(source, ast.iter(), &arena).unwrap();
         assert_eq!(ir, Ir::Deref("hello"));
     }
 
@@ -498,8 +538,8 @@ mod tests {
     fn define_produces_define_node() {
         let arena = Bump::new();
         let source = "(define x 1)";
-        let ast = Ast::with_source(source).unwrap()[0].clone();
-        let ir = Ir::with_ast(source, &ast, &arena).unwrap();
+        let ast = Ast::with_source(source).unwrap();
+        let ir = Ir::with_ast(source, ast.iter(), &arena).unwrap();
         assert_eq!(
             ir,
             Ir::Define {
@@ -513,8 +553,8 @@ mod tests {
     fn define_function_produces_define_with_lambda() {
         let arena = Bump::new();
         let source = "(define (foo) 1)";
-        let ast = Ast::with_source(source).unwrap()[0].clone();
-        let ir = Ir::with_ast(source, &ast, &arena).unwrap();
+        let ast = Ast::with_source(source).unwrap();
+        let ir = Ir::with_ast(source, ast.iter(), &arena).unwrap();
         assert_eq!(
             ir,
             Ir::Define {
@@ -537,8 +577,8 @@ mod tests {
   (+ 1 2 3 4) ;; It adds all the numbers.
 )
 "#;
-        let ast = Ast::with_source(source).unwrap()[0].clone();
-        let ir = Ir::with_ast(source, &ast, &arena).unwrap();
+        let ast = Ast::with_source(source).unwrap();
+        let ir = Ir::with_ast(source, ast.iter(), &arena).unwrap();
         assert_eq!(
             ir,
             Ir::FunctionCall {

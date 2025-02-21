@@ -23,6 +23,12 @@ pub enum CompileError {
     Ir(IrError),
 }
 
+impl From<IrError> for CompileError {
+    fn from(value: IrError) -> Self {
+        CompileError::Ir(value)
+    }
+}
+
 impl From<AstError> for CompileError {
     fn from(value: AstError) -> Self {
         CompileError::Ast(value)
@@ -72,13 +78,8 @@ pub fn compile<'a>(
 ) -> Result<SporeRc<[Instruction]>, CompileError> {
     let mut instructions = Vec::new();
     let mut compiler = Compiler { vm, args: &[] };
-    for ast in asts {
-        let ir = match ir::Ir::with_ast(source, ast, arena) {
-            Ok(ir) => ir,
-            Err(err) => return Err(CompileError::Ir(err)),
-        };
-        compiler.compile(&mut instructions, &ir);
-    }
+    let ir = ir::Ir::with_ast(source, asts, arena)?;
+    compiler.compile(&mut instructions, &ir);
     let instructions: SporeRc<[Instruction]> = instructions.into();
     Ok(instructions)
 }
