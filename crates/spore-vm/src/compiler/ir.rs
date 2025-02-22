@@ -1,6 +1,9 @@
 use bumpalo::Bump;
 
-use super::{ast::Ast, span::Span};
+use super::{
+    ast::{Ast, AstNode},
+    span::Span,
+};
 
 type BumpVec<'a, T> = bumpalo::collections::Vec<'a, T>;
 
@@ -53,6 +56,7 @@ pub enum Constant<'a> {
     String(&'a str),
 }
 
+#[derive(Debug)]
 enum ParsedText<'a> {
     Comment,
     Constant(Constant<'a>),
@@ -229,7 +233,8 @@ impl<'a> Ir<'a> {
         for ast in asts {
             if let Some(stripped_ast) = ast.with_stripped_comments(source) {
                 let builder = IrBuilder { source, arena };
-                irs.push(builder.build(&stripped_ast)?);
+                let ir = builder.build(&stripped_ast)?;
+                irs.push(ir);
             }
         }
         match irs.len() {
@@ -250,37 +255,41 @@ pub struct IrBuilder<'a> {
 impl<'a> IrBuilder<'a> {
     /// Builds an IR from an AST.
     fn build(&self, ast: &Ast) -> Result<Ir<'a>, IrError> {
-        match ast {
-            Ast::Leaf { span } => self.build_leaf(*span),
-            Ast::Tree { span, children } => self.build_tree(*span, children),
+        match &ast.node {
+            AstNode::Leaf => self.build_leaf(ast.span),
+            AstNode::Tree(children) => self.build_tree(ast.span, &children),
         }
     }
 
     /// Builds an IR from an AST.
     fn build_tree(&self, span: Span, children: &[Ast]) -> Result<Ir<'a>, IrError> {
-        let leading_token = children.first().and_then(|ast| match ast {
-            Ast::Tree { .. } => None,
-            Ast::Leaf { span } => {
-                let parsed = ParsedText::new(span.text(self.source));
-                Some((*span, parsed))
+        let leading_token = children.first().and_then(|ast| match &ast.node {
+            AstNode::Leaf => {
+                let parsed = ParsedText::new(ast.span.text(self.source));
+                Some((ast.span, parsed))
             }
+            AstNode::Tree(_) => None,
         });
         match leading_token {
             Some((span, ParsedText::Constant(_))) => Err(IrError::ConstantNotCallable(span)),
             Some((_, ParsedText::Identifier("define"))) => match children {
-                [_define, symbol @ Ast::Leaf { .. }, expr] => self.build_define(symbol, expr),
-                [_define, Ast::Tree { span, children }, exprs @ ..] => {
-                    match children.split_first() {
-                        Some((name, args)) => self.build_define_function(name, args, exprs),
-                        None => Err(IrError::BadDefine(*span)),
-                    }
-                }
+                [_define, symbol @ Ast {
+                    node: AstNode::Leaf,
+                    ..
+                }, expr] => self.build_define(symbol, expr),
+                [_define, args_ast @ Ast {
+                    node: AstNode::Tree(children),
+                    ..
+                }, exprs @ ..] => match children.split_first() {
+                    Some((name, args)) => self.build_define_function(name, args, exprs),
+                    None => Err(IrError::BadDefine(args_ast.span)),
+                },
                 _ => Err(IrError::BadDefine(span)),
             },
             Some((_, ParsedText::Identifier("lambda"))) => match children {
-                [_lambda, args, exprs @ ..] => match args {
-                    Ast::Tree { children, .. } => self.build_lambda(None, children, exprs),
-                    Ast::Leaf { span } => Err(IrError::BadLambda(*span)),
+                [_lambda, args, exprs @ ..] => match &args.node {
+                    AstNode::Leaf => Err(IrError::BadLambda(args.span)),
+                    AstNode::Tree(children) => self.build_lambda(None, &children, exprs),
                 },
                 _ => Err(IrError::BadLambda(span)),
             },
@@ -347,13 +356,13 @@ impl<'a> IrBuilder<'a> {
     ) -> Result<Ir<'a>, IrError> {
         let mut parsed_args = BumpVec::with_capacity_in(args.len(), self.arena);
         for arg in args {
-            match arg {
-                Ast::Leaf { span } => match ParsedText::new(span.text(self.source)) {
+            match &arg.node {
+                AstNode::Leaf => match ParsedText::new(arg.span.text(self.source)) {
                     ParsedText::Comment => todo!("comments not supported as lambda argument"),
                     ParsedText::Identifier(ident) => parsed_args.push(ident),
-                    ParsedText::Constant(_) => return Err(IrError::BadLambda(arg.span())), // Constants are not allowed as arguments
+                    ParsedText::Constant(_) => return Err(IrError::BadLambda(arg.span)), // Constants are not allowed as arguments
                 },
-                Ast::Tree { .. } => return Err(IrError::BadLambda(arg.span())), // Trees are not allowed as arguments
+                AstNode::Tree(_) => return Err(IrError::BadLambda(arg.span)), // Trees are not allowed as arguments
             }
         }
         let mut ir_exprs = BumpVec::with_capacity_in(exprs.len(), self.arena);
@@ -371,12 +380,12 @@ impl<'a> IrBuilder<'a> {
     fn build_define(&self, symbol: &Ast, expr: &Ast) -> Result<Ir<'a>, IrError> {
         let symbol_text = symbol
             .leaf_text(self.source)
-            .ok_or_else(|| IrError::DefineExpectedSymbol(symbol.span()))?;
+            .ok_or_else(|| IrError::DefineExpectedSymbol(symbol.span))?;
         let symbol_text = match ParsedText::new(symbol_text) {
             ParsedText::Comment => todo!("comments not supported in define"),
             ParsedText::Constant(_) => {
                 return Err(IrError::DefineExpectedIdentifierButFoundConstant(
-                    symbol.span(),
+                    symbol.span,
                 ))
             }
             ParsedText::Identifier(symbol) => symbol,
@@ -397,15 +406,13 @@ impl<'a> IrBuilder<'a> {
     ) -> Result<Ir<'a>, IrError> {
         let symbol_text = name
             .leaf_text(self.source)
-            .ok_or_else(|| IrError::DefineExpectedSymbol(name.span()))?;
+            .ok_or_else(|| IrError::DefineExpectedSymbol(name.span))?;
         let symbol_text = match ParsedText::new(symbol_text) {
             ParsedText::Comment => {
                 todo!("comments not supported in define function syntax")
             }
             ParsedText::Constant(_) => {
-                return Err(IrError::DefineExpectedIdentifierButFoundConstant(
-                    name.span(),
-                ))
+                return Err(IrError::DefineExpectedIdentifierButFoundConstant(name.span))
             }
             ParsedText::Identifier(symbol) => symbol,
         };

@@ -3,65 +3,79 @@ use super::{
     tokenizer::{tokenize, Token, TokenType},
 };
 
+/// Contains an Abstract Syntax Tree.
 #[derive(Clone, Debug, PartialEq)]
-/// Represents an Abstract Syntax Tree.
-pub enum Ast {
-    /// Represents a tree node with a span and children.
-    Tree { span: Span, children: Vec<Ast> },
-    /// Represents a leaf node with a span.
-    Leaf { span: Span },
+pub struct Ast {
+    /// The span of text the AST covers.
+    pub span: Span,
+    /// The contents of the AST node.
+    pub node: AstNode,
+}
+
+/// An AST node, which is either a leaf node or a subtree.
+#[derive(Clone, Debug, PartialEq)]
+pub enum AstNode {
+    /// A terminal leaf node.
+    Leaf,
+    /// A subtree.
+    Tree(Vec<Ast>),
 }
 
 impl Ast {
-    /// Returns the span of the AST.
-    pub fn span(&self) -> Span {
-        match self {
-            Ast::Leaf { span } => *span,
-            Ast::Tree { span, .. } => *span,
-        }
-    }
-
     /// Returns the text of the leaf node or `None` if `self` is not a leaf node.
     pub fn leaf_text<'a>(&self, source: &'a str) -> Option<&'a str> {
-        match self {
-            Ast::Leaf { span } => Some(span.text(source)),
+        match &self.node {
+            AstNode::Leaf => Some(self.span.text(source)),
             _ => None,
         }
     }
 
+    /// Returns `true` if `self` is a leaf node.
     pub fn is_leaf(&self) -> bool {
-        matches!(self, Ast::Leaf { .. })
+        matches!(self.node, AstNode::Leaf { .. })
     }
 
+    /// Returns `true` if `self` contains a subtree.
     pub fn is_tree(&self) -> bool {
-        matches!(self, Ast::Tree { .. })
+        matches!(self.node, AstNode::Tree { .. })
     }
 
+    /// Returns `true` if `self` contains ONLY a comment leaf node.
+    pub fn is_comment(&self, source: &str) -> bool {
+        match self.node {
+            AstNode::Leaf => self.span.text(source).starts_with(';'),
+            AstNode::Tree(_) => false,
+        }
+    }
+
+    /// Returns an AST with all comment nodes removed.
     pub fn with_stripped_comments(&self, source: &str) -> Option<Ast> {
-        match self {
-            Ast::Tree { span, children } => Some(Ast::Tree {
-                span: *span,
-                children: children
-                    .iter()
-                    .filter(|ast| match ast {
-                        Ast::Tree { .. } => true,
-                        Ast::Leaf { span } => !span.text(source).starts_with(';'),
-                    })
-                    .cloned()
-                    .collect(),
+        match &self.node {
+            AstNode::Tree(children) => Some(Ast {
+                span: self.span,
+                node: AstNode::Tree(
+                    children
+                        .iter()
+                        .filter(|ast| !ast.is_comment(source))
+                        .cloned()
+                        .collect(),
+                ),
             }),
-            Ast::Leaf { span } => {
-                if span.text(source).starts_with(';') {
+            AstNode::Leaf => {
+                if self.span.text(source).starts_with(';') {
                     None
                 } else {
-                    Some(Ast::Leaf { span: *span })
+                    Some(Ast {
+                        span: self.span,
+                        node: AstNode::Leaf,
+                    })
                 }
             }
         }
     }
 
     pub fn with_text<'a>(&self, source: &'a str) -> AstWithText<'a> {
-        AstWithText::new(source, self)
+        AstWithText::new(self, source)
     }
 }
 
@@ -81,15 +95,18 @@ impl Ast {
     fn next_ast(tokens: &mut impl Iterator<Item = Token>) -> Option<Result<Self, AstError>> {
         let token = tokens.next()?;
         match token.token_type {
-            TokenType::Identifier => Some(Ok(Ast::Leaf { span: token.span })),
+            TokenType::Identifier => Some(Ok(Ast {
+                span: token.span,
+                node: AstNode::Leaf,
+            })),
             TokenType::OpenParen => {
                 let (sub_span, sub_ast) = match Ast::parse_until_close(token.span.start, tokens) {
                     Ok(x) => x,
                     Err(err) => return Some(Err(err)),
                 };
-                Some(Ok(Ast::Tree {
+                Some(Ok(Ast {
                     span: sub_span,
-                    children: sub_ast,
+                    node: AstNode::Tree(sub_ast),
                 }))
             }
             TokenType::CloseParen => Some(Err(AstError::UnexpectedCloseParen(token.span))),
@@ -104,12 +121,15 @@ impl Ast {
         let mut asts = Vec::new();
         while let Some(token) = tokens.next() {
             match token.token_type {
-                TokenType::Identifier => asts.push(Ast::Leaf { span: token.span }),
+                TokenType::Identifier => asts.push(Ast {
+                    span: token.span,
+                    node: AstNode::Leaf,
+                }),
                 TokenType::OpenParen => {
                     let (sub_span, sub_ast) = Ast::parse_until_close(token.span.start, tokens)?;
-                    asts.push(Ast::Tree {
+                    asts.push(Ast {
                         span: sub_span,
-                        children: sub_ast,
+                        node: AstNode::Tree(sub_ast),
                     });
                 }
                 TokenType::CloseParen => {
@@ -135,15 +155,15 @@ pub enum AstWithText<'a> {
 }
 
 impl<'a> AstWithText<'a> {
-    pub fn new(source: &'a str, ast: &Ast) -> Self {
-        match ast {
-            Ast::Tree { children, .. } => AstWithText::Tree(
+    pub fn new(ast: &Ast, source: &'a str) -> Self {
+        match &ast.node {
+            AstNode::Leaf => AstWithText::Leaf(ast.span.text(source)),
+            AstNode::Tree(children) => AstWithText::Tree(
                 children
                     .iter()
-                    .map(|ast| AstWithText::new(source, ast))
+                    .map(|ast| AstWithText::new(ast, source))
                     .collect(),
             ),
-            Ast::Leaf { span } => AstWithText::Leaf(span.text(source)),
         }
     }
 }
@@ -220,8 +240,9 @@ mod tests {
     fn single_identifier_has_single_leaf() {
         assert_eq!(
             Ast::with_source("ident").unwrap()[0],
-            Ast::Leaf {
-                span: Span { start: 0, end: 5 }
+            Ast {
+                span: Span { start: 0, end: 5 },
+                node: AstNode::Leaf
             }
         );
     }
@@ -231,14 +252,17 @@ mod tests {
         assert_eq!(
             Ast::with_source("a b c").unwrap().as_slice(),
             &[
-                Ast::Leaf {
-                    span: Span { start: 0, end: 1 }
+                Ast {
+                    span: Span { start: 0, end: 1 },
+                    node: AstNode::Leaf
                 },
-                Ast::Leaf {
-                    span: Span { start: 2, end: 3 }
+                Ast {
+                    span: Span { start: 2, end: 3 },
+                    node: AstNode::Leaf
                 },
-                Ast::Leaf {
-                    span: Span { start: 4, end: 5 }
+                Ast {
+                    span: Span { start: 4, end: 5 },
+                    node: AstNode::Leaf
                 },
             ]
         );
@@ -248,19 +272,22 @@ mod tests {
     fn parenthesis_make_tree() {
         assert_eq!(
             Ast::with_source("(1 2 3)").unwrap(),
-            &[Ast::Tree {
+            &[Ast {
                 span: Span { start: 0, end: 7 },
-                children: vec![
-                    Ast::Leaf {
-                        span: Span { start: 1, end: 2 }
+                node: AstNode::Tree(vec![
+                    Ast {
+                        span: Span { start: 1, end: 2 },
+                        node: AstNode::Leaf
                     },
-                    Ast::Leaf {
-                        span: Span { start: 3, end: 4 }
+                    Ast {
+                        span: Span { start: 3, end: 4 },
+                        node: AstNode::Leaf
                     },
-                    Ast::Leaf {
-                        span: Span { start: 5, end: 6 }
+                    Ast {
+                        span: Span { start: 5, end: 6 },
+                        node: AstNode::Leaf
                     }
-                ]
+                ])
             }]
         );
     }
@@ -269,8 +296,9 @@ mod tests {
     fn string_is_parsed_as_single_leaf() {
         assert_eq!(
             Ast::with_source("\"hello world\"").unwrap(),
-            &[Ast::Leaf {
-                span: Span { start: 0, end: 13 }
+            &[Ast {
+                span: Span { start: 0, end: 13 },
+                node: AstNode::Leaf
             }]
         );
     }
@@ -279,24 +307,27 @@ mod tests {
     fn nested_parenthesis_form_nested_trees() {
         assert_eq!(
             Ast::with_source("(foo (bar 3))").unwrap(),
-            &[Ast::Tree {
+            &[Ast {
                 span: Span { start: 0, end: 13 },
-                children: vec![
-                    Ast::Leaf {
-                        span: Span { start: 1, end: 4 }
+                node: AstNode::Tree(vec![
+                    Ast {
+                        span: Span { start: 1, end: 4 },
+                        node: AstNode::Leaf
                     },
-                    Ast::Tree {
+                    Ast {
                         span: Span { start: 5, end: 12 },
-                        children: vec![
-                            Ast::Leaf {
-                                span: Span { start: 6, end: 9 }
+                        node: AstNode::Tree(vec![
+                            Ast {
+                                span: Span { start: 6, end: 9 },
+                                node: AstNode::Leaf
                             },
-                            Ast::Leaf {
-                                span: Span { start: 10, end: 11 }
+                            Ast {
+                                span: Span { start: 10, end: 11 },
+                                node: AstNode::Leaf
                             }
-                        ]
+                        ])
                     }
-                ]
+                ])
             }]
         );
     }
