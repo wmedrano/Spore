@@ -6,6 +6,8 @@ use super::{
 /// Contains an Abstract Syntax Tree.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Ast {
+    /// The comment that precedes the AST.
+    pub comment: Option<Span>,
     /// The span of text the AST covers.
     pub span: Span,
     /// The contents of the AST node.
@@ -40,40 +42,6 @@ impl Ast {
         matches!(self.node, AstNode::Tree { .. })
     }
 
-    /// Returns `true` if `self` contains ONLY a comment leaf node.
-    pub fn is_comment(&self, source: &str) -> bool {
-        match self.node {
-            AstNode::Leaf => self.span.text(source).starts_with(';'),
-            AstNode::Tree(_) => false,
-        }
-    }
-
-    /// Returns an AST with all comment nodes removed.
-    pub fn with_stripped_comments(&self, source: &str) -> Option<Ast> {
-        match &self.node {
-            AstNode::Tree(children) => Some(Ast {
-                span: self.span,
-                node: AstNode::Tree(
-                    children
-                        .iter()
-                        .filter(|ast| !ast.is_comment(source))
-                        .cloned()
-                        .collect(),
-                ),
-            }),
-            AstNode::Leaf => {
-                if self.span.text(source).starts_with(';') {
-                    None
-                } else {
-                    Some(Ast {
-                        span: self.span,
-                        node: AstNode::Leaf,
-                    })
-                }
-            }
-        }
-    }
-
     pub fn with_text<'a>(&self, source: &'a str) -> AstWithText<'a> {
         AstWithText::new(self, source)
     }
@@ -96,6 +64,7 @@ impl Ast {
         let token = tokens.next()?;
         match token.token_type {
             TokenType::Identifier => Some(Ok(Ast {
+                comment: None,
                 span: token.span,
                 node: AstNode::Leaf,
             })),
@@ -105,11 +74,23 @@ impl Ast {
                     Err(err) => return Some(Err(err)),
                 };
                 Some(Ok(Ast {
+                    comment: None,
                     span: sub_span,
                     node: AstNode::Tree(sub_ast),
                 }))
             }
             TokenType::CloseParen => Some(Err(AstError::UnexpectedCloseParen(token.span))),
+            TokenType::Comment => Ast::next_ast(tokens).map(|ast_res| {
+                ast_res.map(|ast| Ast {
+                    comment: Some(
+                        ast.comment
+                            .map(|comment| comment.expand(token.span))
+                            .unwrap_or(token.span),
+                    ),
+                    span: ast.span,
+                    node: ast.node,
+                })
+            }),
         }
     }
 
@@ -122,12 +103,14 @@ impl Ast {
         while let Some(token) = tokens.next() {
             match token.token_type {
                 TokenType::Identifier => asts.push(Ast {
+                    comment: None,
                     span: token.span,
                     node: AstNode::Leaf,
                 }),
                 TokenType::OpenParen => {
                     let (sub_span, sub_ast) = Ast::parse_until_close(token.span.start, tokens)?;
                     asts.push(Ast {
+                        comment: None,
                         span: sub_span,
                         node: AstNode::Tree(sub_ast),
                     });
@@ -139,6 +122,7 @@ impl Ast {
                     };
                     return Ok((span, asts));
                 }
+                TokenType::Comment => (),
             }
         }
         Err(AstError::UnclosedParen(Span {
@@ -149,7 +133,14 @@ impl Ast {
 }
 
 #[derive(Debug)]
-pub enum AstWithText<'a> {
+#[allow(dead_code)] // Used for Debug printing.
+pub struct AstWithText<'a> {
+    comment: &'a str,
+    node: AstWithTextNode<'a>,
+}
+
+#[derive(Debug)]
+pub enum AstWithTextNode<'a> {
     Leaf(&'a str),
     Tree(Vec<AstWithText<'a>>),
 }
@@ -157,13 +148,19 @@ pub enum AstWithText<'a> {
 impl<'a> AstWithText<'a> {
     pub fn new(ast: &Ast, source: &'a str) -> Self {
         match &ast.node {
-            AstNode::Leaf => AstWithText::Leaf(ast.span.text(source)),
-            AstNode::Tree(children) => AstWithText::Tree(
-                children
-                    .iter()
-                    .map(|ast| AstWithText::new(ast, source))
-                    .collect(),
-            ),
+            AstNode::Leaf => AstWithText {
+                comment: ast.comment.unwrap_or_default().text(source),
+                node: AstWithTextNode::Leaf(ast.span.text(source)),
+            },
+            AstNode::Tree(children) => AstWithText {
+                comment: ast.comment.unwrap_or_default().text(source),
+                node: AstWithTextNode::Tree(
+                    children
+                        .iter()
+                        .map(|ast| AstWithText::new(ast, source))
+                        .collect(),
+                ),
+            },
         }
     }
 }
@@ -241,6 +238,7 @@ mod tests {
         assert_eq!(
             Ast::with_source("ident").unwrap()[0],
             Ast {
+                comment: None,
                 span: Span { start: 0, end: 5 },
                 node: AstNode::Leaf
             }
@@ -253,14 +251,17 @@ mod tests {
             Ast::with_source("a b c").unwrap().as_slice(),
             &[
                 Ast {
+                    comment: None,
                     span: Span { start: 0, end: 1 },
                     node: AstNode::Leaf
                 },
                 Ast {
+                    comment: None,
                     span: Span { start: 2, end: 3 },
                     node: AstNode::Leaf
                 },
                 Ast {
+                    comment: None,
                     span: Span { start: 4, end: 5 },
                     node: AstNode::Leaf
                 },
@@ -273,17 +274,21 @@ mod tests {
         assert_eq!(
             Ast::with_source("(1 2 3)").unwrap(),
             &[Ast {
+                comment: None,
                 span: Span { start: 0, end: 7 },
                 node: AstNode::Tree(vec![
                     Ast {
+                        comment: None,
                         span: Span { start: 1, end: 2 },
                         node: AstNode::Leaf
                     },
                     Ast {
+                        comment: None,
                         span: Span { start: 3, end: 4 },
                         node: AstNode::Leaf
                     },
                     Ast {
+                        comment: None,
                         span: Span { start: 5, end: 6 },
                         node: AstNode::Leaf
                     }
@@ -297,6 +302,7 @@ mod tests {
         assert_eq!(
             Ast::with_source("\"hello world\"").unwrap(),
             &[Ast {
+                comment: None,
                 span: Span { start: 0, end: 13 },
                 node: AstNode::Leaf
             }]
@@ -308,24 +314,57 @@ mod tests {
         assert_eq!(
             Ast::with_source("(foo (bar 3))").unwrap(),
             &[Ast {
+                comment: None,
                 span: Span { start: 0, end: 13 },
                 node: AstNode::Tree(vec![
                     Ast {
+                        comment: None,
                         span: Span { start: 1, end: 4 },
                         node: AstNode::Leaf
                     },
                     Ast {
+                        comment: None,
                         span: Span { start: 5, end: 12 },
                         node: AstNode::Tree(vec![
                             Ast {
+                                comment: None,
                                 span: Span { start: 6, end: 9 },
                                 node: AstNode::Leaf
                             },
                             Ast {
+                                comment: None,
                                 span: Span { start: 10, end: 11 },
                                 node: AstNode::Leaf
                             }
                         ])
+                    }
+                ])
+            }]
+        );
+    }
+
+    #[test]
+    fn comments_are_preserved() {
+        assert_eq!(
+            Ast::with_source(";; todo\n(1 2 3)").unwrap(),
+            &[Ast {
+                comment: Some(Span { start: 0, end: 8 }),
+                span: Span { start: 8, end: 15 },
+                node: AstNode::Tree(vec![
+                    Ast {
+                        comment: None,
+                        span: Span { start: 9, end: 10 },
+                        node: AstNode::Leaf
+                    },
+                    Ast {
+                        comment: None,
+                        span: Span { start: 11, end: 12 },
+                        node: AstNode::Leaf
+                    },
+                    Ast {
+                        comment: None,
+                        span: Span { start: 13, end: 14 },
+                        node: AstNode::Leaf
                     }
                 ])
             }]

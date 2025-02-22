@@ -1,4 +1,4 @@
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[derive(Copy, Clone, Default, PartialEq, Eq, Debug)]
 /// Represents a span of text in the source code.
 pub struct Span {
     /// The start index of the span.
@@ -11,6 +11,23 @@ impl Span {
     /// Returns the text of the span.
     pub fn text(self, source: &str) -> &str {
         &source[self.start as usize..self.end as usize]
+    }
+
+    pub fn expand(self, other: Span) -> Span {
+        if other.len() == 0 {
+            return self;
+        }
+        if self.len() == 0 {
+            return other;
+        }
+        Span {
+            start: self.start.min(other.start),
+            end: self.end.max(other.end),
+        }
+    }
+
+    pub fn len(self) -> usize {
+        (self.end - self.start) as usize
     }
 }
 

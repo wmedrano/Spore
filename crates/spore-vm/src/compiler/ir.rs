@@ -231,11 +231,9 @@ impl<'a> Ir<'a> {
     ) -> Result<Ir<'a>, IrError> {
         let mut irs = Vec::with_capacity(asts.size_hint().1.unwrap_or(0));
         for ast in asts {
-            if let Some(stripped_ast) = ast.with_stripped_comments(source) {
-                let builder = IrBuilder { source, arena };
-                let ir = builder.build(&stripped_ast)?;
-                irs.push(ir);
-            }
+            let builder = IrBuilder { source, arena };
+            let ir = builder.build(ast)?;
+            irs.push(ir);
         }
         match irs.len() {
             0 => Ok(Ir::Constant(Constant::Void)),

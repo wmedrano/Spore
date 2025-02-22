@@ -20,6 +20,8 @@ pub enum TokenType {
     CloseParen,
     /// An identifier.
     Identifier,
+    /// A comment.
+    Comment,
 }
 
 impl Token {
@@ -147,7 +149,7 @@ fn parse_comment(start: u32, source_iter: &mut Peekable<CharIndices>) -> Token {
                 };
                 return Token {
                     span,
-                    token_type: TokenType::Identifier,
+                    token_type: TokenType::Comment,
                 };
             }
             Some(x) => x,
@@ -161,7 +163,7 @@ fn parse_comment(start: u32, source_iter: &mut Peekable<CharIndices>) -> Token {
                     start,
                     end: end + 1,
                 },
-                token_type: TokenType::Identifier,
+                token_type: TokenType::Comment,
             };
         }
     }
@@ -426,14 +428,14 @@ string"
                     ";; This should be equal to 4.\n",
                     Token {
                         span: Span { start: 9, end: 39 },
-                        token_type: TokenType::Identifier
+                        token_type: TokenType::Comment
                     }
                 ),
                 (
                     ";; This is a new \"comment\", unrelated to (+ 2 2)\n",
                     Token {
                         span: Span { start: 39, end: 88 },
-                        token_type: TokenType::Identifier
+                        token_type: TokenType::Comment
                     }
                 )
             ]
