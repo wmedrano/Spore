@@ -7,35 +7,35 @@ use spore_vm::{
 };
 
 #[derive(Debug)]
-pub struct TextBuffer {
-    pub(crate) text: Rope,
+pub struct SporeRope {
+    pub(crate) inner: Rope,
 }
 
-register_spore_type!(TextBuffer);
+register_spore_type!(SporeRope);
 
-impl TextBuffer {
-    pub fn new(text: &str) -> TextBuffer {
-        TextBuffer {
-            text: Rope::from(text),
+impl SporeRope {
+    pub fn new(text: &str) -> SporeRope {
+        SporeRope {
+            inner: Rope::from(text),
         }
     }
 
     pub fn insert(&mut self, pos: usize, text: &str) -> usize {
-        self.text.insert(pos, text);
+        self.inner.insert(pos, text);
         text.len()
     }
 }
 
-pub fn register_buffer(vm: &mut Vm) {
+pub fn register_rope(vm: &mut Vm) {
     vm.register_native_function(NativeFunction::with_args_1(
-        "new-buffer",
+        "new-rope",
         |vm: &mut Vm, text: Val| {
             let text = text.as_str(vm).ok_or(VmError::WrongType)?;
-            Ok(vm.make_custom(TextBuffer::new(text)))
+            Ok(vm.make_custom(SporeRope::new(text)))
         },
     ))
     .register_native_function(NativeFunction::with_args_1(
-        "new-buffer-with-file",
+        "new-rope-with-file",
         |vm: &mut Vm, filename: Val| {
             let filename = filename.as_str(vm).ok_or(VmError::WrongType)?;
             let file_contents = std::fs::read_to_string(filename).map_err(|err| {
@@ -44,54 +44,54 @@ pub fn register_buffer(vm: &mut Vm) {
                     filename = filename
                 ))
             })?;
-            Ok(vm.make_custom(TextBuffer::new(&file_contents)))
+            Ok(vm.make_custom(SporeRope::new(&file_contents)))
         },
     ))
     .register_native_function(NativeFunction::with_args_1(
-        "buffer-len",
+        "rope-len",
         move |vm: &mut Vm, buffer: Val| {
-            let buffer: &TextBuffer = buffer.as_custom(vm).ok_or(VmError::WrongType)?;
-            Ok(Val::Int(buffer.text.byte_len() as i64))
+            let rope: &SporeRope = buffer.as_custom(vm).ok_or(VmError::WrongType)?;
+            Ok(Val::Int(rope.inner.byte_len() as i64))
         },
     ))
     .register_native_function(NativeFunction::with_args_3(
-        "buffer-insert!",
+        "rope-insert!",
         move |vm: &mut Vm, buffer: Val, pos: Val, text: Val| {
             let pos = pos.as_int().ok_or(VmError::WrongType)? as usize;
             let text = text
                 .as_str(vm)
                 .ok_or(VmError::WrongType)?
                 .to_compact_string();
-            let buffer: &mut TextBuffer = buffer.as_custom_mut(vm).ok_or(VmError::WrongType)?;
+            let buffer: &mut SporeRope = buffer.as_custom_mut(vm).ok_or(VmError::WrongType)?;
             Ok(Val::Int(buffer.insert(pos, &text) as i64))
         },
     ))
     .register_native_function(NativeFunction::with_args_2(
-        "buffer-delete!",
+        "rope-delete!",
         move |vm: &mut Vm, buffer: Val, pos: Val| {
             let pos = pos.as_int().ok_or(VmError::WrongType)? as usize;
-            let buffer: &mut TextBuffer = buffer.as_custom_mut(vm).ok_or(VmError::WrongType)?;
-            buffer.text.delete(pos..pos + 1);
+            let buffer: &mut SporeRope = buffer.as_custom_mut(vm).ok_or(VmError::WrongType)?;
+            buffer.inner.delete(pos..pos + 1);
             Ok(Val::Void)
         },
     ))
     .register_native_function(NativeFunction::with_args_2(
-        "buffer-normalize-cursor",
-        move |vm: &mut Vm, buffer: Val, cursor: Val| {
-            let buffer_len = buffer
-                .as_custom::<TextBuffer>(vm)
+        "rope-normalize-cursor",
+        move |vm: &mut Vm, rope: Val, cursor: Val| {
+            let rope_len = rope
+                .as_custom::<SporeRope>(vm)
                 .ok_or(VmError::WrongType)?
-                .text
+                .inner
                 .byte_len();
             let pos = cursor.as_int().ok_or(VmError::WrongType)?;
-            Ok(Val::Int(pos.clamp(0, buffer_len as i64)))
+            Ok(Val::Int(pos.clamp(0, rope_len as i64)))
         },
     ))
     .register_native_function(NativeFunction::with_args_1(
-        "buffer->string",
-        |vm: &mut Vm, buffer: Val| {
-            let buffer: &TextBuffer = buffer.as_custom(vm).ok_or(VmError::WrongType)?;
-            Ok(vm.make_string(buffer.text.to_string()))
+        "rope->string",
+        |vm: &mut Vm, rope: Val| {
+            let rope: &SporeRope = rope.as_custom(vm).ok_or(VmError::WrongType)?;
+            Ok(vm.make_string(rope.inner.to_string()))
         },
     ));
 }

@@ -3,14 +3,14 @@ use std::time::Duration;
 use clap::{Parser, ValueEnum};
 use ratatui::{DefaultTerminal, Frame};
 use spore_vm::{
-    val::{symbol::SymbolId, Val},
-    vm::Vm,
+    val::symbol::SymbolId,
+    vm::{Vm, VmError},
 };
 use widgets::BufferWidget;
 
-mod buffer;
 mod events;
 mod files;
+mod rope;
 mod shell;
 mod widgets;
 
@@ -38,7 +38,7 @@ pub struct Stats {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
     let mut vm = Vm::default()
-        .with(buffer::register_buffer)
+        .with(rope::register_rope)
         .with(shell::register_shell)
         .with(files::register_files);
     match args.mode {
@@ -57,18 +57,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 #[derive(Copy, Clone)]
 pub struct Symbols {
-    buffer: SymbolId,
     cursor: SymbolId,
     exit_p: SymbolId,
+    text: SymbolId,
     windows: SymbolId,
 }
 
 impl Symbols {
     fn new(vm: &mut Vm) -> Symbols {
         Symbols {
-            buffer: vm.make_symbol_id("buffer"),
             cursor: vm.make_symbol_id("cursor"),
             exit_p: vm.make_symbol_id("exit?"),
+            text: vm.make_symbol_id("text"),
             windows: vm.make_symbol_id("windows"),
         }
     }
@@ -91,17 +91,18 @@ fn run(vm: &mut Vm, mut terminal: DefaultTerminal) -> Result<Stats, Box<dyn std:
             draw(frame, vm, &symbols);
             stats.frames_rendered += 1;
         })?;
-        handle_events(vm);
+        handle_events(vm).map_err(|err| err.with_context(vm, "").to_string())?;
     }
     Ok(stats)
 }
 
-fn handle_events(vm: &mut Vm) {
+fn handle_events(vm: &mut Vm) -> Result<(), VmError> {
     for event in events::events(Duration::from_secs(1)) {
         let f = vm.get_global_by_name("handle-event!").unwrap();
         let s = vm.make_string(event.clone());
-        vm.clean_eval_function(f, &[s]).unwrap();
+        vm.clean_eval_function(f, &[s])?;
     }
+    Ok(())
 }
 
 fn draw(frame: &mut Frame, vm: &Vm, symbols: &Symbols) {
@@ -109,17 +110,15 @@ fn draw(frame: &mut Frame, vm: &Vm, symbols: &Symbols) {
     let windows = vm.get_global(symbols.windows).unwrap().as_list(vm).unwrap();
     for window in windows {
         let window_struct = window.as_struct(vm).unwrap();
-        let text_buffer = window_struct
-            .get(&symbols.buffer)
+        let text = window_struct
+            .get(&symbols.text)
             .unwrap()
             .as_custom(vm)
             .unwrap();
         let cursor = window_struct
             .get(&symbols.cursor)
-            .unwrap_or(&Val::Int(0 as i64))
-            .as_int()
-            .unwrap();
-        let cursor = if cursor < 0 { 0 } else { cursor as usize };
-        frame.render_widget(BufferWidget::new(text_buffer, cursor), frame.area());
+            .map(|x| x.as_int().unwrap())
+            .and_then(|x| if x < 0 { None } else { Some(x as usize) });
+        frame.render_widget(BufferWidget::new(text, cursor), frame.area());
     }
 }

@@ -31,11 +31,17 @@ pub struct BufferWidget<'a> {
 }
 
 impl<'a> BufferWidget<'a> {
-    pub fn new(text: &'a crate::buffer::TextBuffer, cursor: usize) -> BufferWidget<'a> {
-        let cursor_y = text.text.line_of_byte(cursor) as u16;
-        let cursor_x = (cursor - text.text.byte_of_line(cursor_y as usize)) as u16;
+    pub fn new(text: &'a crate::rope::SporeRope, cursor: Option<usize>) -> BufferWidget<'a> {
+        let (cursor_x, cursor_y) = match cursor {
+            Some(cursor) => {
+                let cursor_y = text.inner.line_of_byte(cursor) as u16;
+                let cursor_x = (cursor - text.inner.byte_of_line(cursor_y as usize)) as u16;
+                (cursor_x, cursor_y)
+            }
+            None => (u16::MAX, u16::MAX),
+        };
         BufferWidget {
-            text: &text.text,
+            text: &text.inner,
             cursor_x,
             cursor_y,
         }
