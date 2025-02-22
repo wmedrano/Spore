@@ -114,6 +114,9 @@ impl<'a> ParsedText<'a> {
         if let Some(stripped) = text.strip_prefix('\'') {
             return Some(ParsedText::Constant(Constant::Symbol(stripped)));
         }
+        if let Some(stripped) = text.strip_prefix(':') {
+            return Some(ParsedText::Constant(Constant::Symbol(stripped)));
+        }
         None
     }
 }
@@ -486,6 +489,24 @@ mod tests {
                 ]
             }
         );
+    }
+
+    #[test]
+    fn apostrophe_produces_constant_symbol() {
+        let arena = Bump::new();
+        let source = "'symbol";
+        let ast = Ast::with_source(source).unwrap();
+        let ir = Ir::with_ast(source, ast.iter(), &arena).unwrap();
+        assert_eq!(ir, Ir::Constant(Constant::Symbol("symbol")));
+    }
+
+    #[test]
+    fn colon_produces_constant_symbol() {
+        let arena = Bump::new();
+        let source = ":symbol";
+        let ast = Ast::with_source(source).unwrap();
+        let ir = Ir::with_ast(source, ast.iter(), &arena).unwrap();
+        assert_eq!(ir, Ir::Constant(Constant::Symbol("symbol")));
     }
 
     #[test]
