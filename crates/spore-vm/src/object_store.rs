@@ -352,7 +352,8 @@ impl Objects {
             | Instruction::Get(_)
             | Instruction::Deref(_)
             | Instruction::Jump(_)
-            | Instruction::JumpIf(_) => {}
+            | Instruction::JumpIf(_)
+            | Instruction::Compact(_) => {}
         }
     }
 

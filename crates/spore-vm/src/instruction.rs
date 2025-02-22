@@ -20,6 +20,8 @@ pub enum Instruction {
     Jump(usize),
     /// Jump N instructions if the top value in the stack is truthy.
     JumpIf(usize),
+    /// Compact the last N elements, leaving only the top one.
+    Compact(usize),
 }
 
 pub struct InstructionFormatter<'a> {
@@ -48,6 +50,7 @@ impl std::fmt::Display for InstructionFormatter<'_> {
             }
             Instruction::Jump(n) => write!(f, "Jump({n})"),
             Instruction::JumpIf(n) => write!(f, "JumpIf({n})"),
+            Instruction::Compact(n) => write!(f, "Compact({n})"),
         }
     }
 }

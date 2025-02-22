@@ -31,7 +31,7 @@ pub enum Ir<'a> {
         false_branch: &'a Ir<'a>,
     },
     /// Evaluate multiple expressions but return only the last one.
-    MultiExpr { exprs: &'a [Self] },
+    MultiExpr { exprs: &'a [Ir<'a>] },
     /// An early return expression.
     Return { expr: &'a Ir<'a> },
 }

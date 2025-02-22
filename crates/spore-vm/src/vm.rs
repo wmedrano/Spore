@@ -376,6 +376,7 @@ impl Vm {
             }
             Instruction::Jump(n) => self.execute_jump(*n),
             Instruction::JumpIf(n) => self.execute_jump_if(*n)?,
+            Instruction::Compact(n) => self.execute_compact(*n),
             Instruction::Return => self.execute_return(),
         }
         Ok(())
@@ -475,6 +476,11 @@ impl Vm {
             self.execute_jump(n);
         }
         Ok(())
+    }
+
+    fn execute_compact(&mut self, n: usize) {
+        assert!(n > 0);
+        self.stack.drain(self.stack.len() - n..self.stack.len() - 1);
     }
 }
 

@@ -179,11 +179,12 @@ impl Compiler<'_> {
                 dst[jump] = Instruction::Jump(true_end - true_start);
             }
             Ir::MultiExpr { exprs } => {
-                self.compile(dst, &Ir::Deref("do"));
                 for expr in exprs.iter() {
                     self.compile(dst, expr);
                 }
-                dst.push(Instruction::Eval(1 + exprs.len()));
+                if exprs.len() > 0 {
+                    dst.push(Instruction::Compact(exprs.len()));
+                }
             }
             Ir::Return { expr } => {
                 self.compile(dst, expr);
