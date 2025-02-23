@@ -2,6 +2,7 @@ use ast::{Ast, AstError};
 use bumpalo::Bump;
 use compact_str::CompactString;
 use ir::{Constant, Ir, IrError};
+use span::Span;
 
 use crate::builtins;
 use crate::{
@@ -128,8 +129,8 @@ impl Compiler<'_> {
                 self.compile_if(dst, pred, true_branch, false_branch)?;
             }
             Ir::MultiExpr { exprs } => self.compile_multi_expr(dst, context, exprs)?,
-            Ir::Return { exprs } => {
-                self.compile_return(dst, exprs)?;
+            Ir::Return { span, exprs } => {
+                self.compile_return(dst, context, *span, exprs)?;
             }
         };
         Ok(())
@@ -255,7 +256,16 @@ impl Compiler<'_> {
         Ok(())
     }
 
-    fn compile_return(&mut self, dst: &mut Vec<Instruction>, exprs: &[Ir]) -> Result<(), IrError> {
+    fn compile_return(
+        &mut self,
+        dst: &mut Vec<Instruction>,
+        context: CompilerContext,
+        span: Span,
+        exprs: &[Ir],
+    ) -> Result<(), IrError> {
+        if context == CompilerContext::Module {
+            return Err(IrError::BadReturn(span));
+        }
         for expr in exprs.iter() {
             self.compile(dst, CompilerContext::Expression, expr)?;
         }

@@ -81,6 +81,7 @@ fn run(vm: &mut Vm, mut terminal: DefaultTerminal) -> Result<Stats, Box<dyn std:
     while !vm
         .get_global(symbols.exit_p)
         .unwrap_or_default()
+        .maybe_unbox(vm)
         .is_truthy()
     {
         if stats.frames_rendered % 10 == 0 {

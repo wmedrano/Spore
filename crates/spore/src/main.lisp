@@ -1,10 +1,10 @@
-(define exit? false)
+(define exit? (box false))
 (define text-window (struct :text (new-rope "") :cursor 0))
 (define windows (list text-window))
 
 (define (handle-event! event)
     (when (= event "<esc>")
-      (define exit? true)
+      (box-set! exit? true)
       (return))
   (handle-event-for-window! text-window event))
 

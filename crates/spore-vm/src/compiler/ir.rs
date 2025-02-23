@@ -40,7 +40,7 @@ pub enum Ir<'a> {
     /// Evaluate multiple expressions but return only the last one.
     MultiExpr { exprs: &'a [Ir<'a>] },
     /// An early return expression.
-    Return { exprs: &'a [Ir<'a>] },
+    Return { span: Span, exprs: &'a [Ir<'a>] },
 }
 
 /// Represents a constant value.
@@ -138,6 +138,7 @@ pub enum IrError {
     BadWhen(Span),
     BadLambda(Span),
     BadIf(Span),
+    BadReturn(Span),
     DefineExpectedIdentifierButFoundConstant(Span),
     DefineExpectedSymbol(Span),
 }
@@ -150,9 +151,10 @@ impl std::fmt::Display for IrError {
             IrError::EmptyFunctionCall(span) => write!(f, "empty function call at {span}"),
             IrError::ConstantNotCallable(span) => write!(f, "constant not callable at {span}"),
             IrError::BadDefine(span) => write!(f, "bad define at {span}"),
+            IrError::BadWhen(span) => write!(f, "bad when at {span}"),
             IrError::BadLambda(span) => write!(f, "bad lambda at {span}"),
             IrError::BadIf(span) => write!(f, "bad if at {span}"),
-            IrError::BadWhen(span) => write!(f, "bad when at {span}"),
+            IrError::BadReturn(span) => write!(f, "bad return at {span}"),
             IrError::DefineExpectedIdentifierButFoundConstant(span) => {
                 write!(f, "define expected identifier but found constant at {span}")
             }
@@ -207,6 +209,13 @@ impl std::fmt::Display for IrErrorWithContext<'_> {
                 write!(
                     f,
                     "bad when at {span}: {text}",
+                    text = span.text(self.source)
+                )
+            }
+            IrError::BadReturn(span) => {
+                write!(
+                    f,
+                    "bad return at {span}: {text}",
                     text = span.text(self.source)
                 )
             }
@@ -307,8 +316,8 @@ impl<'a> IrBuilder<'a> {
                 _ => Err(IrError::BadWhen(span)),
             },
             Some((_, ParsedText::Identifier("return"))) => match children {
-                [_return] => self.build_return(None),
-                [_return, expr] => self.build_return(Some(expr)),
+                [_return] => self.build_return(span, None),
+                [_return, expr] => self.build_return(span, Some(expr)),
                 _ => Err(IrError::BadLambda(span)),
             },
             _ => {
@@ -465,15 +474,16 @@ impl<'a> IrBuilder<'a> {
     }
 
     /// Builds a return Ir.
-    fn build_return(&self, expr: Option<&Ast>) -> Result<Ir<'a>, IrError> {
+    fn build_return(&self, span: Span, expr: Option<&Ast>) -> Result<Ir<'a>, IrError> {
         match expr {
             Some(expr) => {
                 let expr = self.arena.alloc(self.build(expr)?);
                 Ok(Ir::Return {
+                    span,
                     exprs: std::slice::from_ref(expr),
                 })
             }
-            None => Ok(Ir::Return { exprs: &[] }),
+            None => Ok(Ir::Return { span, exprs: &[] }),
         }
     }
 }
@@ -627,6 +637,7 @@ mod tests {
                                 args: &[Ir::Deref("n"), Ir::Constant(Constant::Int(2))]
                             },
                             true_branch: &Ir::Return {
+                                span: Span { start: 31, end: 41 },
                                 exprs: &[Ir::Deref("n")]
                             },
                             false_branch: &Ir::Constant(Constant::Void)
