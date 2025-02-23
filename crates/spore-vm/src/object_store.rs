@@ -3,13 +3,10 @@ use std::{collections::HashMap, hash::Hash, marker::PhantomData, num::NonZeroU32
 use compact_str::CompactString;
 
 use crate::{
-    instruction::Instruction,
     module::Module,
     val::{
-        custom::SporeCustom,
-        functions::{ByteCodeFunction, NativeFunction},
-        symbol::SymbolTable,
-        Val,
+        bytecode_function::ByteCodeFunction, custom::SporeCustom, native_function::NativeFunction,
+        symbol::SymbolTable, Val,
     },
     vm::StackFrame,
     SporeCustomType, SporeList, SporeStruct,
@@ -312,14 +309,12 @@ impl Objects {
             Val::NativeFunction(id) => {
                 self.native_functions.maybe_color(id, self.reachable_color);
             }
-            Val::BytecodeFunction(id) => {
+            Val::BytecodeFunction { id } => {
                 if let Some(f) = self
                     .bytecode_functions
                     .maybe_color(id, self.reachable_color)
                 {
-                    for instruction in f.instructions.iter() {
-                        Self::mark_instruction(instruction, queue);
-                    }
+                    queue.extend(f.iter_references());
                 }
             }
             Val::Custom(id) => {
@@ -344,19 +339,6 @@ impl Objects {
         }
     }
 
-    fn mark_instruction(instruction: &Instruction, queue: &mut Vec<Val>) {
-        match instruction {
-            Instruction::Push(v) => queue.push(*v),
-            Instruction::Return
-            | Instruction::Eval(_)
-            | Instruction::Get(_)
-            | Instruction::Deref(_)
-            | Instruction::Jump(_)
-            | Instruction::JumpIf(_)
-            | Instruction::Compact(_) => {}
-        }
-    }
-
     /// Sweeps the object store to collect garbage.
     ///
     /// This function sweeps the object store, collecting any objects that are not marked with the current reachable color.
@@ -377,13 +359,7 @@ mod tests {
 
     #[test]
     fn object_id_is_small() {
-        assert_eq!(
-            std::mem::size_of::<ObjectId<()>>(),
-            std::mem::size_of::<u32>()
-        );
-        assert_eq!(
-            std::mem::size_of::<Option<ObjectId<()>>>(),
-            std::mem::size_of::<u32>()
-        );
+        assert_eq!(std::mem::size_of::<ObjectId<()>>(), 4);
+        assert_eq!(std::mem::size_of::<Option<ObjectId<()>>>(), 4);
     }
 }

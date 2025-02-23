@@ -1,6 +1,6 @@
 use compact_str::format_compact;
 use spore_vm::{
-    val::{functions::NativeFunction, Val},
+    val::{native_function::NativeFunction, Val},
     vm::{Vm, VmError},
 };
 

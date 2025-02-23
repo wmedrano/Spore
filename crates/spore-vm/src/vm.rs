@@ -11,8 +11,7 @@ use crate::{
     module::Module,
     object_store::{ObjectId, Objects},
     val::{
-        functions::{ByteCodeFunction, NativeFunction},
-        symbol::SymbolId,
+        bytecode_function::ByteCodeFunction, native_function::NativeFunction, symbol::SymbolId,
         ShortString, Val,
     },
     SporeCustomType, SporeList, SporeRc, SporeStruct,
@@ -42,7 +41,7 @@ pub struct StackFrame {
 impl StackFrame {
     /// Returns the backing function or `None` if the current function is a native function.
     pub fn function_val(&self) -> Option<Val> {
-        self.function.map(|id| Val::BytecodeFunction(id))
+        self.function.map(|id| Val::BytecodeFunction { id })
     }
 }
 
@@ -308,11 +307,11 @@ impl Vm {
     ///
     /// Note: This should not be used in a Spore Native Function as it resets the evaluation.
     pub fn clean_eval_str(&mut self, s: &str) -> VmResult<Val> {
-        let mut ret = Val::Void;
-        for ast in Ast::with_source(s)? {
-            ret = self.clean_eval_ast(s, &ast)?;
-        }
-        Ok(ret)
+        self.stack.clear();
+        let asts = Ast::with_source(s)?;
+        let bytecode = ByteCodeFunction::new(self, s, asts.iter(), &Bump::new())?;
+        let bytecode_id = self.objects.register_bytecode(bytecode);
+        self.eval_function(Val::BytecodeFunction { id: bytecode_id }, &[])
     }
 
     /// Evaluates the AST of Spore code.
@@ -322,9 +321,9 @@ impl Vm {
     /// Note: This should not be used in a Spore Native Function as it resets the evaluation.
     pub fn clean_eval_ast(&mut self, s: &str, ast: &Ast) -> VmResult<Val> {
         self.stack.clear();
-        let bytecode = ByteCodeFunction::new(self, s, ast, &Bump::new())?;
+        let bytecode = ByteCodeFunction::new(self, s, std::iter::once(ast), &Bump::new())?;
         let bytecode_id = self.objects.register_bytecode(bytecode);
-        self.eval_function(Val::BytecodeFunction(bytecode_id), &[])
+        self.eval_function(Val::BytecodeFunction { id: bytecode_id }, &[])
     }
 
     /// Evaluate a function and return its result.
@@ -432,7 +431,9 @@ impl Vm {
                 *self.stack.last_mut().expect("Value should exist") = ret;
                 self.stack_frame = self.previous_stack_frames.pop().unwrap();
             }
-            Val::BytecodeFunction(bytecode_function) => {
+            Val::BytecodeFunction {
+                id: bytecode_function,
+            } => {
                 let function = self
                     .objects
                     .bytecode_functions

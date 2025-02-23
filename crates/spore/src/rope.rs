@@ -2,7 +2,7 @@ use compact_str::{format_compact, ToCompactString};
 use crop::Rope;
 use spore_vm::{
     register_spore_type,
-    val::{functions::NativeFunction, Val},
+    val::{native_function::NativeFunction, Val},
     vm::{Vm, VmError},
 };
 

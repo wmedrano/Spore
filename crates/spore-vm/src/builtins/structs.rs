@@ -1,5 +1,5 @@
 use crate::{
-    val::{functions::NativeFunction, Val},
+    val::{native_function::NativeFunction, Val},
     vm::{Vm, VmError, VmResult},
     SporeStruct,
 };

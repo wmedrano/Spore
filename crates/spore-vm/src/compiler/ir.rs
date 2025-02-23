@@ -97,8 +97,8 @@ impl<'a> ParsedText<'a> {
     }
 
     fn new_comment(text: &'a str) -> Option<Self> {
-        if text.chars().next() == Some(';') {
-            return Some(ParsedText::Comment);
+        if text.starts_with(';') {
+            Some(ParsedText::Comment)
         } else {
             None
         }
@@ -239,7 +239,7 @@ impl<'a> Ir<'a> {
             0 => Ok(Ir::Constant(Constant::Void)),
             1 => Ok(irs.pop().unwrap()),
             _ => Ok(Ir::MultiExpr {
-                exprs: arena.alloc_slice_fill_iter(irs.into_iter()),
+                exprs: arena.alloc_slice_fill_iter(irs),
             }),
         }
     }
@@ -255,7 +255,7 @@ impl<'a> IrBuilder<'a> {
     fn build(&self, ast: &Ast) -> Result<Ir<'a>, IrError> {
         match &ast.node {
             AstNode::Leaf => self.build_leaf(ast.span),
-            AstNode::Tree(children) => self.build_tree(ast.span, &children),
+            AstNode::Tree(children) => self.build_tree(ast.span, children),
         }
     }
 
@@ -287,7 +287,7 @@ impl<'a> IrBuilder<'a> {
             Some((_, ParsedText::Identifier("lambda"))) => match children {
                 [_lambda, args, exprs @ ..] => match &args.node {
                     AstNode::Leaf => Err(IrError::BadLambda(args.span)),
-                    AstNode::Tree(children) => self.build_lambda(None, &children, exprs),
+                    AstNode::Tree(children) => self.build_lambda(None, children, exprs),
                 },
                 _ => Err(IrError::BadLambda(span)),
             },
@@ -378,7 +378,7 @@ impl<'a> IrBuilder<'a> {
     fn build_define(&self, symbol: &Ast, expr: &Ast) -> Result<Ir<'a>, IrError> {
         let symbol_text = symbol
             .leaf_text(self.source)
-            .ok_or_else(|| IrError::DefineExpectedSymbol(symbol.span))?;
+            .ok_or(IrError::DefineExpectedSymbol(symbol.span))?;
         let symbol_text = match ParsedText::new(symbol_text) {
             ParsedText::Comment => todo!("comments not supported in define"),
             ParsedText::Constant(_) => {
@@ -404,7 +404,7 @@ impl<'a> IrBuilder<'a> {
     ) -> Result<Ir<'a>, IrError> {
         let symbol_text = name
             .leaf_text(self.source)
-            .ok_or_else(|| IrError::DefineExpectedSymbol(name.span))?;
+            .ok_or(IrError::DefineExpectedSymbol(name.span))?;
         let symbol_text = match ParsedText::new(symbol_text) {
             ParsedText::Comment => {
                 todo!("comments not supported in define function syntax")

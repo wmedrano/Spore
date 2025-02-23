@@ -1,10 +1,12 @@
+pub mod bytecode_function;
 pub mod custom;
-pub mod functions;
+pub mod native_function;
 pub mod symbol;
 
+use bytecode_function::ByteCodeFunction;
 use compact_str::CompactString;
 use custom::SporeCustom;
-use functions::{ByteCodeFunction, NativeFunction};
+use native_function::NativeFunction;
 use symbol::SymbolId;
 
 use crate::{object_store::ObjectId, vm::Vm, SporeCustomType, SporeList, SporeStruct};
@@ -64,7 +66,7 @@ pub enum Val {
     /// Contains a native function.
     NativeFunction(ObjectId<NativeFunction>),
     /// Contains a bytecode function.
-    BytecodeFunction(ObjectId<ByteCodeFunction>),
+    BytecodeFunction { id: ObjectId<ByteCodeFunction> },
     /// Contains a custom object.
     Custom(ObjectId<SporeCustom>),
     /// Holds a mutable value.
@@ -216,7 +218,7 @@ impl Val {
             Val::List(_) => DataType::List,
             Val::Struct(_) => DataType::StructT,
             Val::NativeFunction(_) => DataType::Function,
-            Val::BytecodeFunction(_) => DataType::Function,
+            Val::BytecodeFunction { id: _ } => DataType::Function,
             Val::Custom(_) => DataType::Custom,
             Val::Box(_) => DataType::Box,
             Val::DataType(_) => DataType::DataType,
@@ -307,8 +309,8 @@ impl ValFormatter<'_> {
                     None => write!(f, "(native-fn-{})", object_id.as_num()),
                 }
             }
-            Val::BytecodeFunction(object_id) => {
-                match self.vm.objects.bytecode_functions.get(object_id) {
+            Val::BytecodeFunction { id: function } => {
+                match self.vm.objects.bytecode_functions.get(function) {
                     Some(bc) => write!(
                         f,
                         "(fn-{})",
@@ -317,7 +319,7 @@ impl ValFormatter<'_> {
                             None => "lambda",
                         }
                     ),
-                    None => write!(f, "(fn-{})", object_id.as_num()),
+                    None => write!(f, "(fn-{})", function.as_num()),
                 }
             }
             Val::Custom(object_id) => match self.vm.objects.custom.get(object_id) {

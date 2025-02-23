@@ -14,10 +14,10 @@ impl Span {
     }
 
     pub fn expand(self, other: Span) -> Span {
-        if other.len() == 0 {
+        if other.is_empty() {
             return self;
         }
-        if self.len() == 0 {
+        if self.is_empty() {
             return other;
         }
         Span {
@@ -28,6 +28,10 @@ impl Span {
 
     pub fn len(self) -> usize {
         (self.end - self.start) as usize
+    }
+
+    pub fn is_empty(self) -> bool {
+        self.start == self.end
     }
 }
 

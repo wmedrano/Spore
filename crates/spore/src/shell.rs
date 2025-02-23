@@ -2,7 +2,7 @@ use std::process::Stdio;
 
 use compact_str::{format_compact, CompactString};
 use spore_vm::{
-    val::functions::NativeFunction,
+    val::native_function::NativeFunction,
     vm::{Vm, VmError},
 };
 

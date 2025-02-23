@@ -6,7 +6,7 @@ use ir::{Constant, Ir, IrError};
 use crate::builtins;
 use crate::{
     instruction::Instruction,
-    val::{functions::ByteCodeFunction, Val},
+    val::{bytecode_function::ByteCodeFunction, Val},
     vm::Vm,
     SporeRc,
 };
@@ -154,7 +154,7 @@ impl Compiler<'_> {
                     args: args.len() as u32,
                 };
                 let lambda_id = self.vm.objects.register_bytecode(lambda);
-                dst.push(Instruction::Push(Val::BytecodeFunction(lambda_id)));
+                dst.push(Instruction::Push(Val::BytecodeFunction { id: lambda_id }));
             }
             Ir::If {
                 pred,
@@ -182,7 +182,7 @@ impl Compiler<'_> {
                 for expr in exprs.iter() {
                     self.compile(dst, expr);
                 }
-                if exprs.len() > 0 {
+                if !exprs.is_empty() {
                     dst.push(Instruction::Compact(exprs.len()));
                 }
             }

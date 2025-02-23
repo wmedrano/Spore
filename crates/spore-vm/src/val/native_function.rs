@@ -1,9 +1,6 @@
-use bumpalo::Bump;
 use compact_str::CompactString;
 
 use crate::{
-    compiler::{ast::Ast, CompileError},
-    instruction::Instruction,
     vm::{Vm, VmError, VmResult},
     SporeRc,
 };
@@ -132,33 +129,5 @@ impl std::fmt::Debug for NativeFunction {
 impl PartialEq for NativeFunction {
     fn eq(&self, other: &Self) -> bool {
         std::ptr::addr_eq(SporeRc::as_ptr(&self.f), SporeRc::as_ptr(&other.f))
-    }
-}
-
-#[derive(Clone, Debug, Default, PartialEq)]
-/// Represents a bytecode function.
-pub struct ByteCodeFunction {
-    /// The name of the function.
-    pub name: Option<CompactString>,
-    /// The instructions of the function.
-    pub instructions: SporeRc<[Instruction]>,
-    /// The number of arguments the function takes.
-    pub args: u32,
-}
-
-impl ByteCodeFunction {
-    /// Creates a new bytecode function from an Ast.
-    pub fn new(
-        vm: &mut Vm,
-        s: &str,
-        ast: &Ast,
-        arena: &Bump,
-    ) -> Result<ByteCodeFunction, CompileError> {
-        let instructions = crate::compiler::compile(vm, s, std::iter::once(ast), arena)?;
-        Ok(ByteCodeFunction {
-            name: None,
-            instructions,
-            args: 0,
-        })
     }
 }

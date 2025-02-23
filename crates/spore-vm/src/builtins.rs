@@ -10,7 +10,7 @@ pub const INTERNAL_DEFINE_FUNCTION: &str = "%define";
 use compact_str::format_compact;
 
 use crate::{
-    val::{functions::NativeFunction, Val},
+    val::{native_function::NativeFunction, Val},
     vm::{Vm, VmError, VmResult},
     SporeList,
 };
@@ -108,7 +108,7 @@ fn equal_fn_impl(vm: &Vm, a: Val, b: Val) -> bool {
                 }
         }
         (Val::NativeFunction(a), Val::NativeFunction(b)) => a == b,
-        (Val::BytecodeFunction(a), Val::BytecodeFunction(b)) => a == b,
+        (Val::BytecodeFunction { id: a }, Val::BytecodeFunction { id: b }) => a == b,
         (Val::Custom(a), Val::Custom(b)) => a == b,
         (Val::DataType(a), Val::DataType(b)) => a == b,
         _ => false,
@@ -134,7 +134,7 @@ fn help_fn(vm: &mut Vm) -> VmResult<Val> {
 mod tests {
     use crate::{
         register_spore_type,
-        val::{functions::NativeFunction, Val},
+        val::{native_function::NativeFunction, Val},
         vm::{Vm, VmError},
     };
 
