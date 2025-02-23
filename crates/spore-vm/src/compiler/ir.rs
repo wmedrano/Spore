@@ -36,7 +36,7 @@ pub enum Ir<'a> {
     /// Evaluate multiple expressions but return only the last one.
     MultiExpr { exprs: &'a [Ir<'a>] },
     /// An early return expression.
-    Return { expr: &'a Ir<'a> },
+    Return { exprs: &'a [Ir<'a>] },
 }
 
 /// Represents a constant value.
@@ -462,11 +462,11 @@ impl<'a> IrBuilder<'a> {
         match expr {
             Some(expr) => {
                 let expr = self.arena.alloc(self.build(expr)?);
-                Ok(Ir::Return { expr })
+                Ok(Ir::Return {
+                    exprs: std::slice::from_ref(expr),
+                })
             }
-            None => Ok(Ir::Return {
-                expr: &Ir::Constant(Constant::Void),
-            }),
+            None => Ok(Ir::Return { exprs: &[] }),
         }
     }
 }
@@ -589,6 +589,58 @@ mod tests {
                     name: Some("foo"),
                     args: &[],
                     exprs: &[Ir::Constant(Constant::Int(1))]
+                }
+            }
+        );
+    }
+
+    #[test]
+    fn define_with_function_call_produces_lambda() {
+        let arena = Bump::new();
+        let source = r#"
+(define (fib n)
+  (if (< n 2) (return n))
+  (+ (fib (- n 2)) (fib (- n 1))))"#;
+        let ast = Ast::with_source(source).unwrap();
+        let ir = Ir::with_ast(source, ast.iter(), &arena).unwrap();
+        assert_eq!(
+            ir,
+            Ir::Define {
+                symbol: "fib",
+                expr: &Ir::Lambda {
+                    name: Some("fib"),
+                    args: &["n"],
+                    exprs: &[
+                        Ir::If {
+                            pred: &Ir::FunctionCall {
+                                function: &Ir::Deref("<"),
+                                args: &[Ir::Deref("n"), Ir::Constant(Constant::Int(2))]
+                            },
+                            true_branch: &Ir::Return {
+                                exprs: &[Ir::Deref("n")]
+                            },
+                            false_branch: &Ir::Constant(Constant::Void)
+                        },
+                        Ir::FunctionCall {
+                            function: &Ir::Deref("+"),
+                            args: &[
+                                Ir::FunctionCall {
+                                    function: &Ir::Deref("fib"),
+                                    args: &[Ir::FunctionCall {
+                                        function: &Ir::Deref("-"),
+                                        args: &[Ir::Deref("n"), Ir::Constant(Constant::Int(2))]
+                                    }]
+                                },
+                                Ir::FunctionCall {
+                                    function: &Ir::Deref("fib"),
+                                    args: &[Ir::FunctionCall {
+                                        function: &Ir::Deref("-"),
+                                        args: &[Ir::Deref("n"), Ir::Constant(Constant::Int(1))]
+                                    }]
+                                }
+                            ]
+                        }
+                    ]
                 }
             }
         );

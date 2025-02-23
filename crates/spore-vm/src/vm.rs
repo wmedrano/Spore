@@ -612,7 +612,6 @@ mod tests {
     fn recursive_function_call() {
         let mut vm = Vm::default();
         let source = r#"
-;; fib(n) = fib(n-2) + fib(n-1)
 (define (fib n)
   (if (< n 2) (return n))
   (+ (fib (- n 2)) (fib (- n 1))))"#;
