@@ -22,6 +22,7 @@ pub mod tokenizer;
 pub enum CompileError {
     Ast(AstError),
     Ir(IrError),
+    ModuleCompilationFoundUnexpectedLocalVariables,
 }
 
 impl From<IrError> for CompileError {
@@ -43,6 +44,9 @@ impl std::fmt::Display for CompileError {
         match self {
             CompileError::Ast(e) => write!(f, "{e}"),
             CompileError::Ir(e) => write!(f, "{e}"),
+            CompileError::ModuleCompilationFoundUnexpectedLocalVariables => {
+                write!(f, "module compilation found unexpected local variables")
+            }
         }
     }
 }
@@ -66,6 +70,9 @@ impl std::fmt::Display for CompileErrorWithContext<'_> {
         match self.err {
             CompileError::Ast(e) => write!(f, "{}", e.with_context(self.source)),
             CompileError::Ir(e) => write!(f, "{}", e.with_context(self.source)),
+            CompileError::ModuleCompilationFoundUnexpectedLocalVariables => {
+                write!(f, "module compilation found unexpected local variables")
+            }
         }
     }
 }
@@ -78,9 +85,16 @@ pub fn compile_module<'a>(
     arena: &'a Bump,
 ) -> Result<SporeRc<[Instruction]>, CompileError> {
     let mut instructions = Vec::new();
-    let mut compiler = Compiler { vm, args: &[] };
+    let mut compiler = Compiler {
+        vm,
+        args: &[],
+        locals: Vec::new(),
+    };
     let ir = ir::Ir::with_ast(source, asts, arena)?;
     compiler.compile(&mut instructions, CompilerContext::Module, &ir)?;
+    if !compiler.locals.is_empty() {
+        return Err(CompileError::ModuleCompilationFoundUnexpectedLocalVariables);
+    }
     let instructions: SporeRc<[Instruction]> = instructions.into();
     Ok(instructions)
 }
@@ -88,6 +102,7 @@ pub fn compile_module<'a>(
 struct Compiler<'a> {
     pub vm: &'a mut Vm,
     pub args: &'a [&'a str],
+    pub locals: Vec<CompactString>,
 }
 
 #[derive(Copy, Clone, PartialEq)]
@@ -115,7 +130,7 @@ impl Compiler<'_> {
             }
             Ir::Define { span, symbol, expr } => match context {
                 CompilerContext::Module => self.compile_module_define(dst, symbol, expr)?,
-                CompilerContext::Lambda => return Err(IrError::BadDefine(*span)),
+                CompilerContext::Lambda => self.compile_lambda_define(dst, symbol, expr)?,
                 CompilerContext::Expression => return Err(IrError::BadDefine(*span)),
             },
             Ir::Lambda { name, args, exprs } => {
@@ -149,6 +164,11 @@ impl Compiler<'_> {
     }
 
     fn compile_deref(&mut self, identifier: &str) -> Instruction {
+        for (idx, arg) in self.locals.iter().enumerate() {
+            if *arg == identifier {
+                return Instruction::Get(idx + self.args.len());
+            }
+        }
         for (idx, arg) in self.args.iter().enumerate() {
             if *arg == identifier {
                 return Instruction::Get(idx);
@@ -192,21 +212,40 @@ impl Compiler<'_> {
         Ok(())
     }
 
+    fn compile_lambda_define(
+        &mut self,
+        dst: &mut Vec<Instruction>,
+        symbol: &str,
+        expr: &Ir,
+    ) -> Result<(), IrError> {
+        let idx = self.locals.len() + self.args.len();
+        self.compile(dst, CompilerContext::Expression, expr)?;
+        dst.push(Instruction::Set(idx));
+        self.locals.push(symbol.into());
+        Ok(())
+    }
+
     fn compile_lambda(
         &mut self,
         name: Option<&str>,
         args: &[&str],
         exprs: &[Ir],
     ) -> Result<Instruction, IrError> {
-        let mut compiler = Compiler { vm: self.vm, args };
+        let mut compiler = Compiler {
+            vm: self.vm,
+            args,
+            locals: Vec::new(),
+        };
         let mut lambda_instructions = Vec::new();
         for expr in exprs.iter() {
             compiler.compile(&mut lambda_instructions, CompilerContext::Lambda, expr)?;
         }
+        let locals = compiler.locals.len() as u32;
         let lambda = ByteCodeFunction {
             name: name.map(CompactString::new),
             instructions: lambda_instructions.into(),
             args: args.len() as u32,
+            locals,
         };
         let lambda_id = self.vm.objects.register_bytecode(lambda);
         Ok(Instruction::Push(Val::BytecodeFunction { id: lambda_id }))

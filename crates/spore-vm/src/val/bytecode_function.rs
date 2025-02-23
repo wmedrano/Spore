@@ -19,6 +19,8 @@ pub struct ByteCodeFunction {
     pub instructions: SporeRc<[Instruction]>,
     /// The number of arguments the function takes.
     pub args: u32,
+    /// The number of local variables.
+    pub locals: u32,
 }
 
 impl ByteCodeFunction {
@@ -34,6 +36,7 @@ impl ByteCodeFunction {
             name: None,
             instructions,
             args: 0,
+            locals: 0,
         })
     }
 
@@ -47,6 +50,7 @@ impl ByteCodeFunction {
                 Instruction::Return
                 | Instruction::Eval(_)
                 | Instruction::Get(_)
+                | Instruction::Set(_)
                 | Instruction::Jump(_)
                 | Instruction::JumpIf(_)
                 | Instruction::Compact(_) => None,

@@ -62,7 +62,6 @@ pub enum Constant<'a> {
 
 #[derive(Debug)]
 enum ParsedText<'a> {
-    Comment,
     Constant(Constant<'a>),
     Identifier(&'a str),
 }
@@ -70,8 +69,7 @@ enum ParsedText<'a> {
 impl<'a> ParsedText<'a> {
     /// Creates a new `ParsedText`.
     fn new(text: &'a str) -> Self {
-        Self::new_comment(text)
-            .or_else(|| Self::new_bool(text))
+        None.or_else(|| Self::new_bool(text))
             .or_else(|| Self::new_number(text))
             .or_else(|| Self::new_string(text))
             .or_else(|| Self::new_symbol(text))
@@ -98,14 +96,6 @@ impl<'a> ParsedText<'a> {
             return Some(ParsedText::Constant(Constant::Float(x)));
         }
         None
-    }
-
-    fn new_comment(text: &'a str) -> Option<Self> {
-        if text.starts_with(';') {
-            Some(ParsedText::Comment)
-        } else {
-            None
-        }
     }
 
     fn new_string(text: &'a str) -> Option<Self> {
@@ -334,7 +324,6 @@ impl<'a> IrBuilder<'a> {
     /// Builds an IR from an AST.
     fn build_leaf(&self, leaf_span: Span) -> Result<Ir<'a>, IrError> {
         match ParsedText::new(leaf_span.text(self.source)) {
-            ParsedText::Comment => todo!("comments not supported as value"),
             ParsedText::Constant(c) => Ok(Ir::Constant(c)),
             ParsedText::Identifier(ident) => Ok(Ir::Deref(ident)),
         }
@@ -369,7 +358,6 @@ impl<'a> IrBuilder<'a> {
         for arg in args {
             match &arg.node {
                 AstNode::Leaf => match ParsedText::new(arg.span.text(self.source)) {
-                    ParsedText::Comment => todo!("comments not supported as lambda argument"),
                     ParsedText::Identifier(ident) => parsed_args.push(ident),
                     ParsedText::Constant(_) => return Err(IrError::BadLambda(arg.span)), // Constants are not allowed as arguments
                 },
@@ -393,7 +381,6 @@ impl<'a> IrBuilder<'a> {
             .leaf_text(self.source)
             .ok_or(IrError::DefineExpectedSymbol(symbol.span))?;
         let symbol_text = match ParsedText::new(symbol_text) {
-            ParsedText::Comment => todo!("comments not supported in define"),
             ParsedText::Constant(_) => {
                 return Err(IrError::DefineExpectedIdentifierButFoundConstant(
                     symbol.span,
@@ -421,9 +408,6 @@ impl<'a> IrBuilder<'a> {
             .leaf_text(self.source)
             .ok_or(IrError::DefineExpectedSymbol(name.span))?;
         let symbol_text = match ParsedText::new(symbol_text) {
-            ParsedText::Comment => {
-                todo!("comments not supported in define function syntax")
-            }
             ParsedText::Constant(_) => {
                 return Err(IrError::DefineExpectedIdentifierButFoundConstant(name.span))
             }

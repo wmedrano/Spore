@@ -14,6 +14,8 @@ pub enum Instruction {
     Eval(usize),
     /// Gets a value from the stack.
     Get(usize),
+    /// Sets the value for the stakc.
+    Set(usize),
     /// Dereferences a symbol.
     Deref(SymbolId),
     /// Jump N instructions.
@@ -45,6 +47,7 @@ impl std::fmt::Display for InstructionFormatter<'_> {
             Instruction::Push(val) => write!(f, "Push({})", val.formatted(self.vm)),
             Instruction::Eval(n) => write!(f, "Eval({n})"),
             Instruction::Get(n) => write!(f, "Get({n})"),
+            Instruction::Set(n) => write!(f, "Set({n})"),
             Instruction::Deref(symbol_id) => {
                 write!(f, "Deref({})", Val::Symbol(*symbol_id).formatted(self.vm))
             }

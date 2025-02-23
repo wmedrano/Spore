@@ -366,6 +366,11 @@ impl Vm {
                 let v = self.stack[idx];
                 self.stack.push(v);
             }
+            Instruction::Set(idx) => {
+                let idx = self.stack_frame.stack_start + idx;
+                let v = self.stack.pop().unwrap();
+                self.stack[idx] = v;
+            }
             Instruction::Deref(symbol) => {
                 let v = match self.globals.values.get(symbol) {
                     Some(v) => *v,
@@ -446,6 +451,8 @@ impl Vm {
                         actual: arg_count,
                     });
                 }
+                self.stack
+                    .extend(std::iter::repeat_n(Val::Void, function.locals as usize));
                 let previous_frame = std::mem::replace(
                     &mut self.stack_frame,
                     StackFrame {
@@ -622,5 +629,29 @@ mod tests {
             Val::Void
         );
         assert_eq!(vm.clean_eval_str("(fib 10)").unwrap(), Val::Int(55));
+    }
+
+    #[test]
+    fn define_in_function_sets_local_variable() {
+        let mut vm = Vm::default();
+        vm.clean_eval_str(
+            r#"
+(define x 10)
+(define (double-x)
+  (define x (+ x x))
+  x)
+(define (add-x arg)
+  (define x (+ arg x))
+  x)
+"#,
+        )
+        .unwrap();
+        assert_eq!(
+            vm.clean_eval_str("(list (double-x) (add-x 20) x)")
+                .unwrap()
+                .as_list(&vm)
+                .unwrap(),
+            &[Val::Int(20), Val::Int(30), Val::Int(10)]
+        );
     }
 }
