@@ -70,7 +70,7 @@ impl std::fmt::Display for CompileErrorWithContext<'_> {
 }
 
 /// Compiles a string of source code into bytecode instructions.
-pub fn compile<'a>(
+pub fn compile_module<'a>(
     vm: &mut Vm,
     source: &'a str,
     asts: impl Iterator<Item = &'a Ast>,
@@ -79,7 +79,7 @@ pub fn compile<'a>(
     let mut instructions = Vec::new();
     let mut compiler = Compiler { vm, args: &[] };
     let ir = ir::Ir::with_ast(source, asts, arena)?;
-    compiler.compile(&mut instructions, &ir);
+    compiler.compile(&mut instructions, CompilerContext::Module, &ir)?;
     let instructions: SporeRc<[Instruction]> = instructions.into();
     Ok(instructions)
 }
@@ -89,33 +89,50 @@ struct Compiler<'a> {
     pub args: &'a [&'a str],
 }
 
+#[derive(Copy, Clone, PartialEq)]
+enum CompilerContext {
+    Module,
+    Lambda,
+    Expression,
+}
+
 impl Compiler<'_> {
     /// Compiles an IR into bytecode instructions.
-    fn compile(&mut self, dst: &mut Vec<Instruction>, ir: &Ir) {
+    fn compile(
+        &mut self,
+        dst: &mut Vec<Instruction>,
+        context: CompilerContext,
+        ir: &Ir,
+    ) -> Result<(), IrError> {
         match ir {
             Ir::Constant(constant) => {
                 dst.push(self.compile_constant(constant));
             }
             Ir::Deref(ident) => dst.push(self.compile_deref(ident)),
             Ir::FunctionCall { function, args } => {
-                self.compile_function_call(dst, function, args);
+                self.compile_function_call(dst, function, args)?;
             }
-            Ir::Define { symbol, expr } => self.compile_define(dst, symbol, expr),
+            Ir::Define { span, symbol, expr } => match context {
+                CompilerContext::Module => self.compile_module_define(dst, symbol, expr)?,
+                CompilerContext::Lambda => return Err(IrError::BadDefine(*span)),
+                CompilerContext::Expression => return Err(IrError::BadDefine(*span)),
+            },
             Ir::Lambda { name, args, exprs } => {
-                dst.push(self.compile_lambda(*name, args, exprs));
+                dst.push(self.compile_lambda(*name, args, exprs)?);
             }
             Ir::If {
                 pred,
                 true_branch,
                 false_branch,
             } => {
-                self.compile_if(dst, pred, true_branch, false_branch);
+                self.compile_if(dst, pred, true_branch, false_branch)?;
             }
-            Ir::MultiExpr { exprs } => self.compile_multi_expr(dst, exprs),
+            Ir::MultiExpr { exprs } => self.compile_multi_expr(dst, context, exprs)?,
             Ir::Return { exprs } => {
-                self.compile_return(dst, exprs);
+                self.compile_return(dst, exprs)?;
             }
-        }
+        };
+        Ok(())
     }
 
     fn compile_constant(&mut self, constant: &Constant) -> Instruction {
@@ -140,15 +157,26 @@ impl Compiler<'_> {
         Instruction::Deref(symbol_id)
     }
 
-    fn compile_function_call(&mut self, dst: &mut Vec<Instruction>, function: &Ir, args: &[Ir]) {
-        self.compile(dst, function);
+    fn compile_function_call(
+        &mut self,
+        dst: &mut Vec<Instruction>,
+        function: &Ir,
+        args: &[Ir],
+    ) -> Result<(), IrError> {
+        self.compile(dst, CompilerContext::Expression, function)?;
         for arg in args.iter() {
-            self.compile(dst, arg);
+            self.compile(dst, CompilerContext::Expression, arg)?;
         }
         dst.push(Instruction::Eval(1 + args.len()));
+        Ok(())
     }
 
-    fn compile_define(&mut self, dst: &mut Vec<Instruction>, symbol: &str, expr: &Ir) {
+    fn compile_module_define(
+        &mut self,
+        dst: &mut Vec<Instruction>,
+        symbol: &str,
+        expr: &Ir,
+    ) -> Result<(), IrError> {
         dst.push(Instruction::Deref(
             self.vm
                 .objects
@@ -158,15 +186,21 @@ impl Compiler<'_> {
         dst.push(Instruction::Push(Val::Symbol(
             self.vm.make_symbol_id(symbol),
         )));
-        self.compile(dst, expr);
+        self.compile(dst, CompilerContext::Expression, expr)?;
         dst.push(Instruction::Eval(3));
+        Ok(())
     }
 
-    fn compile_lambda(&mut self, name: Option<&str>, args: &[&str], exprs: &[Ir]) -> Instruction {
+    fn compile_lambda(
+        &mut self,
+        name: Option<&str>,
+        args: &[&str],
+        exprs: &[Ir],
+    ) -> Result<Instruction, IrError> {
         let mut compiler = Compiler { vm: self.vm, args };
         let mut lambda_instructions = Vec::new();
         for expr in exprs.iter() {
-            compiler.compile(&mut lambda_instructions, expr);
+            compiler.compile(&mut lambda_instructions, CompilerContext::Lambda, expr)?;
         }
         let lambda = ByteCodeFunction {
             name: name.map(CompactString::new),
@@ -174,7 +208,7 @@ impl Compiler<'_> {
             args: args.len() as u32,
         };
         let lambda_id = self.vm.objects.register_bytecode(lambda);
-        Instruction::Push(Val::BytecodeFunction { id: lambda_id })
+        Ok(Instruction::Push(Val::BytecodeFunction { id: lambda_id }))
     }
 
     fn compile_if(
@@ -183,28 +217,34 @@ impl Compiler<'_> {
         pred: &Ir,
         true_branch: &Ir,
         false_branch: &Ir,
-    ) {
-        self.compile(dst, pred);
+    ) -> Result<(), IrError> {
+        self.compile(dst, CompilerContext::Expression, pred)?;
         let condition_jump = dst.len();
         dst.push(Instruction::JumpIf(0));
 
         let false_start = dst.len();
-        self.compile(dst, false_branch);
+        self.compile(dst, CompilerContext::Expression, false_branch)?;
         let jump = dst.len();
         dst.push(Instruction::Jump(0));
         let false_end = dst.len();
 
         let true_start = dst.len();
-        self.compile(dst, true_branch);
+        self.compile(dst, CompilerContext::Expression, true_branch)?;
         let true_end = dst.len();
 
         dst[condition_jump] = Instruction::JumpIf(false_end - false_start);
         dst[jump] = Instruction::Jump(true_end - true_start);
+        Ok(())
     }
 
-    fn compile_multi_expr(&mut self, dst: &mut Vec<Instruction>, exprs: &[Ir]) {
+    fn compile_multi_expr(
+        &mut self,
+        dst: &mut Vec<Instruction>,
+        context: CompilerContext,
+        exprs: &[Ir],
+    ) -> Result<(), IrError> {
         for expr in exprs.iter() {
-            self.compile(dst, expr);
+            self.compile(dst, context, expr)?;
         }
         if exprs.is_empty() {
             dst.push(Instruction::Push(Val::Void));
@@ -212,15 +252,17 @@ impl Compiler<'_> {
         if exprs.len() > 1 {
             dst.push(Instruction::Compact(exprs.len()));
         }
+        Ok(())
     }
 
-    fn compile_return(&mut self, dst: &mut Vec<Instruction>, exprs: &[Ir]) {
+    fn compile_return(&mut self, dst: &mut Vec<Instruction>, exprs: &[Ir]) -> Result<(), IrError> {
         for expr in exprs.iter() {
-            self.compile(dst, expr);
+            self.compile(dst, CompilerContext::Expression, expr)?;
         }
         if exprs.is_empty() {
             dst.push(Instruction::Push(Val::Void));
         }
         dst.push(Instruction::Return);
+        Ok(())
     }
 }

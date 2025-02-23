@@ -29,7 +29,7 @@ impl ByteCodeFunction {
         ast: impl Iterator<Item = &'a Ast>,
         arena: &'a Bump,
     ) -> Result<ByteCodeFunction, CompileError> {
-        let instructions = crate::compiler::compile(vm, s, ast, arena)?;
+        let instructions = crate::compiler::compile_module(vm, s, ast, arena)?;
         Ok(ByteCodeFunction {
             name: None,
             instructions,

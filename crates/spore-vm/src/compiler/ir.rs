@@ -20,7 +20,11 @@ pub enum Ir<'a> {
         args: &'a [Self],
     },
     /// A define expression.
-    Define { symbol: &'a str, expr: &'a Ir<'a> },
+    Define {
+        span: Span,
+        symbol: &'a str,
+        expr: &'a Ir<'a>,
+    },
     /// A lambda expression.
     Lambda {
         name: Option<&'a str>,
@@ -274,12 +278,12 @@ impl<'a> IrBuilder<'a> {
                 [_define, symbol @ Ast {
                     node: AstNode::Leaf,
                     ..
-                }, expr] => self.build_define(symbol, expr),
+                }, expr] => self.build_define(span, symbol, expr),
                 [_define, args_ast @ Ast {
                     node: AstNode::Tree(children),
                     ..
                 }, exprs @ ..] => match children.split_first() {
-                    Some((name, args)) => self.build_define_function(name, args, exprs),
+                    Some((name, args)) => self.build_define_function(span, name, args, exprs),
                     None => Err(IrError::BadDefine(args_ast.span)),
                 },
                 _ => Err(IrError::BadDefine(span)),
@@ -375,7 +379,7 @@ impl<'a> IrBuilder<'a> {
     }
 
     /// Builds a define IR.
-    fn build_define(&self, symbol: &Ast, expr: &Ast) -> Result<Ir<'a>, IrError> {
+    fn build_define(&self, span: Span, symbol: &Ast, expr: &Ast) -> Result<Ir<'a>, IrError> {
         let symbol_text = symbol
             .leaf_text(self.source)
             .ok_or(IrError::DefineExpectedSymbol(symbol.span))?;
@@ -390,6 +394,7 @@ impl<'a> IrBuilder<'a> {
         };
         let expr = self.arena.alloc(self.build(expr)?);
         Ok(Ir::Define {
+            span,
             symbol: symbol_text,
             expr,
         })
@@ -398,6 +403,7 @@ impl<'a> IrBuilder<'a> {
     /// Builds a define function IR.
     fn build_define_function(
         &self,
+        span: Span,
         name: &Ast,
         args: &[Ast],
         exprs: &[Ast],
@@ -416,6 +422,7 @@ impl<'a> IrBuilder<'a> {
         };
         let lambda = self.build_lambda(Some(symbol_text), args, exprs)?;
         Ok(Ir::Define {
+            span,
             symbol: symbol_text,
             expr: self.arena.alloc(lambda),
         })
@@ -569,6 +576,7 @@ mod tests {
         assert_eq!(
             ir,
             Ir::Define {
+                span: Span { start: 0, end: 12 },
                 symbol: "x",
                 expr: &Ir::Constant(Constant::Int(1))
             }
@@ -584,6 +592,7 @@ mod tests {
         assert_eq!(
             ir,
             Ir::Define {
+                span: Span { start: 0, end: 16 },
                 symbol: "foo",
                 expr: &Ir::Lambda {
                     name: Some("foo"),
@@ -606,6 +615,7 @@ mod tests {
         assert_eq!(
             ir,
             Ir::Define {
+                span: Span { start: 1, end: 77 },
                 symbol: "fib",
                 expr: &Ir::Lambda {
                     name: Some("fib"),

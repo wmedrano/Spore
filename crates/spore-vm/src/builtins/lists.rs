@@ -184,7 +184,7 @@ mod tests {
     fn nth_returns_element_at_index() {
         let mut vm = Vm::default();
         let got = vm
-            .clean_eval_str("(do (define lst (list 1 2 3)) (nth lst 1))")
+            .clean_eval_str("(define lst (list 1 2 3)) (nth lst 1)")
             .unwrap();
         assert_eq!(got, Val::Int(2));
     }
@@ -192,14 +192,14 @@ mod tests {
     #[test]
     fn nth_returns_error_if_index_out_of_bounds() {
         let mut vm = Vm::default();
-        let got = vm.clean_eval_str("(do (define lst (list 1 2 3)) (nth lst 3))");
+        let got = vm.clean_eval_str("(define lst (list 1 2 3)) (nth lst 3)");
         assert_eq!(got, Err(VmError::Custom("index out of range".into())));
     }
 
     #[test]
     fn nth_returns_error_if_index_is_negative() {
         let mut vm = Vm::default();
-        let got = vm.clean_eval_str("(do (define lst (list 1 2 3)) (nth lst -1))");
+        let got = vm.clean_eval_str("(define lst (list 1 2 3)) (nth lst -1)");
         assert_eq!(got, Err(VmError::Custom("negative idx provided".into())));
     }
 
