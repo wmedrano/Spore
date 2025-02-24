@@ -6,12 +6,12 @@ use val::{symbol::SymbolId, Val};
 pub mod builtins;
 /// Compiler.
 pub mod compiler;
+/// Items related to garbage collection and object management.
+pub mod gc;
 /// Instructions.
 pub mod instruction;
 /// Modules.
 pub mod module;
-/// Object store.
-pub mod object_store;
 /// Values.
 pub mod val;
 /// Virtual machine.

@@ -1,137 +1,56 @@
-use ast::{Ast, AstError};
-use bumpalo::Bump;
 use compact_str::CompactString;
-use ir::{Constant, Ir, IrError};
-use span::Span;
 
-use crate::builtins;
 use crate::{
+    builtins,
     instruction::Instruction,
-    val::{bytecode_function::ByteCodeFunction, Val},
+    val::{bytecode_function::ByteCodeFunction, symbol::SymbolId, Val},
     vm::Vm,
-    SporeRc,
 };
 
-pub mod ast;
-mod ir;
-pub mod span;
-pub mod tokenizer;
+use super::{
+    ir::{Ir, IrError},
+    span::Span,
+};
 
-#[derive(Copy, Clone, Debug, PartialEq)]
-/// Represents an error that can occur during compilation.
-pub enum CompileError {
-    Ast(AstError),
-    Ir(IrError),
-    ModuleCompilationFoundUnexpectedLocalVariables,
-}
-
-impl From<IrError> for CompileError {
-    fn from(value: IrError) -> Self {
-        CompileError::Ir(value)
-    }
-}
-
-impl From<AstError> for CompileError {
-    fn from(value: AstError) -> Self {
-        CompileError::Ast(value)
-    }
-}
-
-impl std::error::Error for CompileError {}
-
-impl std::fmt::Display for CompileError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            CompileError::Ast(e) => write!(f, "{e}"),
-            CompileError::Ir(e) => write!(f, "{e}"),
-            CompileError::ModuleCompilationFoundUnexpectedLocalVariables => {
-                write!(f, "module compilation found unexpected local variables")
-            }
-        }
-    }
-}
-
-impl CompileError {
-    pub fn with_context(self, source: &str) -> CompileErrorWithContext<'_> {
-        CompileErrorWithContext { err: self, source }
-    }
-}
-
-#[derive(Debug, PartialEq)]
-pub struct CompileErrorWithContext<'a> {
-    err: CompileError,
-    source: &'a str,
-}
-
-impl std::error::Error for CompileErrorWithContext<'_> {}
-
-impl std::fmt::Display for CompileErrorWithContext<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self.err {
-            CompileError::Ast(e) => write!(f, "{}", e.with_context(self.source)),
-            CompileError::Ir(e) => write!(f, "{}", e.with_context(self.source)),
-            CompileError::ModuleCompilationFoundUnexpectedLocalVariables => {
-                write!(f, "module compilation found unexpected local variables")
-            }
-        }
-    }
-}
-
-/// Compiles a string of source code into bytecode instructions.
-pub fn compile_module<'a>(
-    vm: &mut Vm,
-    source: &'a str,
-    asts: impl Iterator<Item = &'a Ast>,
-    arena: &'a Bump,
-) -> Result<SporeRc<[Instruction]>, CompileError> {
-    let mut instructions = Vec::new();
-    let mut compiler = Compiler {
-        vm,
-        args: &[],
-        locals: Vec::new(),
-    };
-    let ir = ir::Ir::with_ast(source, asts, arena)?;
-    compiler.compile(&mut instructions, CompilerContext::Module, &ir)?;
-    if !compiler.locals.is_empty() {
-        return Err(CompileError::ModuleCompilationFoundUnexpectedLocalVariables);
-    }
-    let instructions: SporeRc<[Instruction]> = instructions.into();
-    Ok(instructions)
-}
-
-struct Compiler<'a> {
+pub struct CompilerContext<'a> {
     pub vm: &'a mut Vm,
     pub args: &'a [&'a str],
     pub locals: Vec<CompactString>,
 }
 
 #[derive(Copy, Clone, PartialEq)]
-enum CompilerContext {
+pub enum CompilerScope {
     Module,
     Lambda,
     Expression,
 }
 
-impl Compiler<'_> {
+enum ResolvedVariable {
+    Argument(usize),
+    Local(usize),
+    Global(SymbolId),
+}
+
+impl CompilerContext<'_> {
     /// Compiles an IR into bytecode instructions.
-    fn compile(
+    pub fn compile(
         &mut self,
         dst: &mut Vec<Instruction>,
-        context: CompilerContext,
+        context: CompilerScope,
         ir: &Ir,
     ) -> Result<(), IrError> {
         match ir {
             Ir::Constant(constant) => {
-                dst.push(self.compile_constant(constant));
+                dst.push(Instruction::Push(constant.to_val(self.vm)));
             }
             Ir::Deref(ident) => dst.push(self.compile_deref(ident)),
             Ir::FunctionCall { function, args } => {
                 self.compile_function_call(dst, function, args)?;
             }
             Ir::Define { span, symbol, expr } => match context {
-                CompilerContext::Module => self.compile_module_define(dst, symbol, expr)?,
-                CompilerContext::Lambda => self.compile_lambda_define(dst, symbol, expr)?,
-                CompilerContext::Expression => return Err(IrError::BadDefine(*span)),
+                CompilerScope::Module => self.compile_module_define(dst, symbol, expr)?,
+                CompilerScope::Lambda => self.compile_lambda_define(dst, symbol, expr)?,
+                CompilerScope::Expression => return Err(IrError::BadDefine(*span)),
             },
             Ir::Lambda { name, args, exprs } => {
                 dst.push(self.compile_lambda(*name, args, exprs)?);
@@ -151,31 +70,26 @@ impl Compiler<'_> {
         Ok(())
     }
 
-    fn compile_constant(&mut self, constant: &Constant) -> Instruction {
-        let val = match constant {
-            Constant::Void => Val::Void,
-            Constant::Bool(x) => Val::Bool(*x),
-            Constant::Int(x) => Val::Int(*x),
-            Constant::Float(x) => Val::Float(*x),
-            Constant::Symbol(x) => self.vm.make_symbol(x),
-            Constant::String(x) => self.vm.make_string(*x),
-        };
-        Instruction::Push(val)
-    }
-
-    fn compile_deref(&mut self, identifier: &str) -> Instruction {
+    fn resolve_variable(&mut self, identifier: &str) -> ResolvedVariable {
         for (idx, arg) in self.locals.iter().enumerate() {
             if *arg == identifier {
-                return Instruction::Get(idx + self.args.len());
+                return ResolvedVariable::Local(idx + self.args.len());
             }
         }
         for (idx, arg) in self.args.iter().enumerate() {
             if *arg == identifier {
-                return Instruction::Get(idx);
+                return ResolvedVariable::Argument(idx);
             }
         }
         let symbol_id = self.vm.make_symbol_id(identifier);
-        Instruction::Deref(symbol_id)
+        ResolvedVariable::Global(symbol_id)
+    }
+
+    fn compile_deref(&mut self, identifier: &str) -> Instruction {
+        match self.resolve_variable(identifier) {
+            ResolvedVariable::Argument(idx) | ResolvedVariable::Local(idx) => Instruction::Get(idx),
+            ResolvedVariable::Global(symbol_id) => Instruction::Deref(symbol_id),
+        }
     }
 
     fn compile_function_call(
@@ -184,9 +98,9 @@ impl Compiler<'_> {
         function: &Ir,
         args: &[Ir],
     ) -> Result<(), IrError> {
-        self.compile(dst, CompilerContext::Expression, function)?;
+        self.compile(dst, CompilerScope::Expression, function)?;
         for arg in args.iter() {
-            self.compile(dst, CompilerContext::Expression, arg)?;
+            self.compile(dst, CompilerScope::Expression, arg)?;
         }
         dst.push(Instruction::Eval(1 + args.len()));
         Ok(())
@@ -207,7 +121,7 @@ impl Compiler<'_> {
         dst.push(Instruction::Push(Val::Symbol(
             self.vm.make_symbol_id(symbol),
         )));
-        self.compile(dst, CompilerContext::Expression, expr)?;
+        self.compile(dst, CompilerScope::Expression, expr)?;
         dst.push(Instruction::Eval(3));
         Ok(())
     }
@@ -219,7 +133,7 @@ impl Compiler<'_> {
         expr: &Ir,
     ) -> Result<(), IrError> {
         let idx = self.locals.len() + self.args.len();
-        self.compile(dst, CompilerContext::Expression, expr)?;
+        self.compile(dst, CompilerScope::Expression, expr)?;
         dst.push(Instruction::Set(idx));
         self.locals.push(symbol.into());
         Ok(())
@@ -231,14 +145,14 @@ impl Compiler<'_> {
         args: &[&str],
         exprs: &[Ir],
     ) -> Result<Instruction, IrError> {
-        let mut compiler = Compiler {
+        let mut compiler = CompilerContext {
             vm: self.vm,
             args,
             locals: Vec::new(),
         };
         let mut lambda_instructions = Vec::new();
         for expr in exprs.iter() {
-            compiler.compile(&mut lambda_instructions, CompilerContext::Lambda, expr)?;
+            compiler.compile(&mut lambda_instructions, CompilerScope::Lambda, expr)?;
         }
         let locals = compiler.locals.len() as u32;
         let lambda = ByteCodeFunction {
@@ -258,18 +172,18 @@ impl Compiler<'_> {
         true_branch: &Ir,
         false_branch: &Ir,
     ) -> Result<(), IrError> {
-        self.compile(dst, CompilerContext::Expression, pred)?;
+        self.compile(dst, CompilerScope::Expression, pred)?;
         let condition_jump = dst.len();
         dst.push(Instruction::JumpIf(0));
 
         let false_start = dst.len();
-        self.compile(dst, CompilerContext::Expression, false_branch)?;
+        self.compile(dst, CompilerScope::Expression, false_branch)?;
         let jump = dst.len();
         dst.push(Instruction::Jump(0));
         let false_end = dst.len();
 
         let true_start = dst.len();
-        self.compile(dst, CompilerContext::Expression, true_branch)?;
+        self.compile(dst, CompilerScope::Expression, true_branch)?;
         let true_end = dst.len();
 
         dst[condition_jump] = Instruction::JumpIf(false_end - false_start);
@@ -280,7 +194,7 @@ impl Compiler<'_> {
     fn compile_multi_expr(
         &mut self,
         dst: &mut Vec<Instruction>,
-        context: CompilerContext,
+        context: CompilerScope,
         exprs: &[Ir],
     ) -> Result<(), IrError> {
         for expr in exprs.iter() {
@@ -298,15 +212,15 @@ impl Compiler<'_> {
     fn compile_return(
         &mut self,
         dst: &mut Vec<Instruction>,
-        context: CompilerContext,
+        context: CompilerScope,
         span: Span,
         exprs: &[Ir],
     ) -> Result<(), IrError> {
-        if context == CompilerContext::Module {
+        if context == CompilerScope::Module {
             return Err(IrError::BadReturn(span));
         }
         for expr in exprs.iter() {
-            self.compile(dst, CompilerContext::Expression, expr)?;
+            self.compile(dst, CompilerScope::Expression, expr)?;
         }
         if exprs.is_empty() {
             dst.push(Instruction::Push(Val::Void));

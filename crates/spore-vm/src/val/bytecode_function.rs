@@ -2,7 +2,7 @@ use bumpalo::Bump;
 use compact_str::CompactString;
 
 use crate::{
-    compiler::{ast::Ast, CompileError},
+    compiler::{ast::Ast, error::CompileError},
     instruction::Instruction,
     vm::Vm,
     SporeRc,
@@ -25,7 +25,12 @@ pub struct ByteCodeFunction {
 
 impl ByteCodeFunction {
     /// Creates a new bytecode function from an Ast.
-    pub fn new<'a>(
+    ///
+    /// It is assumed that the bytecode is a module definition. This implies:
+    ///
+    /// 1. No arguments.
+    /// 2. `(define x y)` defines a global variable.
+    pub fn with_module_source<'a>(
         vm: &mut Vm,
         s: &'a str,
         ast: impl Iterator<Item = &'a Ast>,

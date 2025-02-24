@@ -1,6 +1,7 @@
-use std::{collections::HashMap, hash::Hash, marker::PhantomData, num::NonZeroU32};
+pub use id::ObjectId;
 
 use compact_str::CompactString;
+use typed_object_store::{GcColor, TypedObjectStore};
 
 use crate::{
     module::Module,
@@ -12,131 +13,8 @@ use crate::{
     SporeCustomType, SporeList, SporeStruct,
 };
 
-/// An identifier for an object in the object store.
-pub struct ObjectId<T>(NonZeroU32, PhantomData<T>);
-
-impl<T> ObjectId<T> {
-    /// Get the id as a number.
-    pub fn as_num(self) -> u32 {
-        u32::from(self.0)
-    }
-}
-
-impl<T> PartialEq for ObjectId<T> {
-    fn eq(&self, other: &Self) -> bool {
-        self.0 == other.0
-    }
-}
-
-#[derive(Debug)]
-/// A colored object.
-pub struct ColoredObject<T> {
-    object: T,
-    color: GcColor,
-}
-
-/// Represents a garbage collection color.
-#[derive(Copy, Clone, Default, PartialEq, Eq, Debug)]
-pub enum GcColor {
-    #[default]
-    Red,
-    Blue,
-}
-
-#[derive(Debug)]
-/// A store for objects of a specific type.
-pub struct TypedObjectStore<T> {
-    id_to_object: HashMap<ObjectId<T>, ColoredObject<T>>,
-    next_id: NonZeroU32,
-}
-
-impl<T> std::fmt::Debug for ObjectId<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let full_type_name = std::any::type_name::<T>();
-        let type_name = full_type_name.split("::").last().unwrap_or("UNKNOWN");
-        f.debug_tuple("ObjectId")
-            .field(&type_name)
-            .field(&self.0)
-            .finish()
-    }
-}
-
-impl<T> Eq for ObjectId<T> {}
-impl<T> Copy for ObjectId<T> {}
-impl<T> Clone for ObjectId<T> {
-    fn clone(&self) -> Self {
-        *self
-    }
-}
-
-impl<T> Hash for ObjectId<T> {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.0.hash(state)
-    }
-}
-
-impl<T> Default for TypedObjectStore<T> {
-    fn default() -> Self {
-        TypedObjectStore {
-            id_to_object: HashMap::new(),
-            next_id: NonZeroU32::new(1).unwrap(),
-        }
-    }
-}
-
-impl<T> TypedObjectStore<T> {
-    /// Maybe color an object, changing its color to the provided `color` if it is not already that color.
-    ///
-    /// If the object's color is already `color`, this function returns `None`. Otherwise, the
-    /// object's color is updated to `color` and a reference to the object is returned in `Some`.
-    pub fn maybe_color(&mut self, id: ObjectId<T>, color: GcColor) -> Option<&T> {
-        let colored_object = self.id_to_object.get_mut(&id)?;
-        if colored_object.color == color {
-            return None;
-        }
-        colored_object.color = color;
-        Some(&colored_object.object)
-    }
-
-    /// Gets an object by its ID.
-    pub fn get(&self, id: ObjectId<T>) -> Option<&T> {
-        self.id_to_object.get(&id).map(|v| &v.object)
-    }
-
-    /// Gets a mutable reference to an object by its ID.
-    pub fn get_mut(&mut self, id: ObjectId<T>) -> Option<&mut T> {
-        self.id_to_object.get_mut(&id).map(|v| &mut v.object)
-    }
-
-    /// Registers a new object in the store.
-    pub fn register(&mut self, object: T, color: GcColor) -> ObjectId<T> {
-        let id = ObjectId(self.next_id, PhantomData);
-        self.next_id = self
-            .next_id
-            .checked_add(1)
-            .expect("ObjectId limit reached, all u32 values exhausted");
-        self.id_to_object
-            .insert(id, ColoredObject { object, color });
-        id
-    }
-
-    /// Sweeps objects of a specific color from the store.
-    pub fn sweep_color(&mut self, color: GcColor) -> usize {
-        let before = self.id_to_object.len();
-        self.id_to_object.retain(|_, v| v.color != color);
-        before - self.id_to_object.len()
-    }
-}
-
-impl GcColor {
-    /// Returns the opposite color.
-    pub fn swap(self) -> GcColor {
-        match self {
-            GcColor::Red => GcColor::Blue,
-            GcColor::Blue => GcColor::Red,
-        }
-    }
-}
+mod id;
+mod typed_object_store;
 
 #[derive(Debug, Default)]
 /// Stores all the heap allocated objects.
@@ -294,14 +172,14 @@ impl Objects {
             }
             Val::List(id) => {
                 if let Some(lst) = self.lists.maybe_color(id, self.reachable_color) {
-                    for v in lst.iter() {
+                    for v in lst.iter().filter(|v| v.requires_gc()) {
                         queue.push(*v);
                     }
                 }
             }
             Val::Struct(id) => {
                 if let Some(strct) = self.structs.maybe_color(id, self.reachable_color) {
-                    for v in strct.values() {
+                    for v in strct.values().filter(|v| v.requires_gc()) {
                         queue.push(*v);
                     }
                 }
@@ -314,19 +192,21 @@ impl Objects {
                     .bytecode_functions
                     .maybe_color(id, self.reachable_color)
                 {
-                    queue.extend(f.iter_references());
+                    queue.extend(f.iter_references().filter(|v| v.requires_gc()));
                 }
             }
             Val::Custom(id) => {
                 if let Some(obj) = self.custom.maybe_color(id, self.reachable_color) {
-                    for val in obj.references() {
+                    for val in obj.references().iter().filter(|v| v.requires_gc()) {
                         queue.push(*val);
                     }
                 }
             }
             Val::Box(id) => {
                 if let Some(v) = self.boxes.maybe_color(id, self.reachable_color) {
-                    queue.push(*v);
+                    if v.requires_gc() {
+                        queue.push(*v);
+                    }
                 }
             }
             Val::Void
@@ -350,6 +230,7 @@ impl Objects {
             + self.native_functions.sweep_color(self.reachable_color)
             + self.bytecode_functions.sweep_color(self.reachable_color)
             + self.custom.sweep_color(self.reachable_color)
+            + self.boxes.sweep_color(self.reachable_color)
     }
 }
 

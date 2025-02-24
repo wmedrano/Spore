@@ -124,8 +124,8 @@ impl Repl {
 mod tests {
     use super::*;
     use spore_vm::compiler::ast::AstError;
+    use spore_vm::compiler::error::CompileError;
     use spore_vm::compiler::span::Span;
-    use spore_vm::compiler::CompileError;
     use spore_vm::vm::VmError;
 
     #[test]

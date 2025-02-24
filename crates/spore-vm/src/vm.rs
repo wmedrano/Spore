@@ -5,11 +5,11 @@ use crate::{
     builtins::register_builtins,
     compiler::{
         ast::{Ast, AstError},
-        CompileError,
+        error::CompileError,
     },
+    gc::{ObjectId, Objects},
     instruction::Instruction,
     module::Module,
-    object_store::{ObjectId, Objects},
     val::{
         bytecode_function::ByteCodeFunction, native_function::NativeFunction, symbol::SymbolId,
         ShortString, Val,
@@ -309,7 +309,7 @@ impl Vm {
     pub fn clean_eval_str(&mut self, s: &str) -> VmResult<Val> {
         self.stack.clear();
         let asts = Ast::with_source(s)?;
-        let bytecode = ByteCodeFunction::new(self, s, asts.iter(), &Bump::new())?;
+        let bytecode = ByteCodeFunction::with_module_source(self, s, asts.iter(), &Bump::new())?;
         let bytecode_id = self.objects.register_bytecode(bytecode);
         self.eval_function(Val::BytecodeFunction { id: bytecode_id }, &[])
     }
@@ -321,7 +321,8 @@ impl Vm {
     /// Note: This should not be used in a Spore Native Function as it resets the evaluation.
     pub fn clean_eval_ast(&mut self, s: &str, ast: &Ast) -> VmResult<Val> {
         self.stack.clear();
-        let bytecode = ByteCodeFunction::new(self, s, std::iter::once(ast), &Bump::new())?;
+        let bytecode =
+            ByteCodeFunction::with_module_source(self, s, std::iter::once(ast), &Bump::new())?;
         let bytecode_id = self.objects.register_bytecode(bytecode);
         self.eval_function(Val::BytecodeFunction { id: bytecode_id }, &[])
     }

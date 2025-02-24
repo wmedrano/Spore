@@ -9,7 +9,7 @@ use custom::SporeCustom;
 use native_function::NativeFunction;
 use symbol::SymbolId;
 
-use crate::{object_store::ObjectId, vm::Vm, SporeCustomType, SporeList, SporeStruct};
+use crate::{gc::ObjectId, vm::Vm, SporeCustomType, SporeList, SporeStruct};
 
 /// The maximum length of a short string.
 ///
@@ -203,6 +203,25 @@ impl Val {
     /// Return the underlying boxed value. If the value is not a box, then it is returned.
     pub fn maybe_unbox(self, vm: &Vm) -> Val {
         self.unbox(vm).unwrap_or(self)
+    }
+
+    pub fn requires_gc(self) -> bool {
+        match self {
+            Val::String(_)
+            | Val::List(_)
+            | Val::Struct(_)
+            | Val::NativeFunction(_)
+            | Val::BytecodeFunction { .. } => true,
+            Val::Custom(_)
+            | Val::Box(_)
+            | Val::Void
+            | Val::Bool(_)
+            | Val::Int(_)
+            | Val::Float(_)
+            | Val::Symbol(_)
+            | Val::ShortString(_)
+            | Val::DataType(_) => false,
+        }
     }
 
     /// Get the type of the value.
