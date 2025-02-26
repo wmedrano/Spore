@@ -218,10 +218,10 @@ impl Val {
             | Val::List(_)
             | Val::Struct(_)
             | Val::NativeFunction(_)
-            | Val::BytecodeFunction { .. } => true,
-            Val::Custom(_)
-            | Val::Box(_)
-            | Val::Void
+            | Val::BytecodeFunction { .. }
+            | Val::Custom(_)
+            | Val::Box(_) => true,
+            Val::Void
             | Val::Bool(_)
             | Val::Int(_)
             | Val::Float(_)

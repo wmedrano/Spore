@@ -113,9 +113,9 @@ fn draw(frame: &mut Frame, vm: &Vm, symbols: &Symbols) {
         let window_struct = window.as_struct(vm).unwrap();
         let text = window_struct
             .get(&symbols.text)
-            .unwrap()
+            .expect(":text not found in window struct")
             .as_custom(vm)
-            .unwrap();
+            .expect(":text for window was not a rope");
         let cursor = window_struct
             .get(&symbols.cursor)
             .map(|x| x.as_int().unwrap())

@@ -172,9 +172,10 @@ impl Objects {
     ///
     /// This function marks a single `Val` as reachable by setting the appropriate color in the object store.
     fn mark_one(&mut self, val: Val, queue: &mut Vec<Val>) {
-        match val {
+        let has_gc = match val {
             Val::String(id) => {
                 self.strings.maybe_color(id, self.reachable_color);
+                true
             }
             Val::List(id) => {
                 if let Some(lst) = self.lists.maybe_color(id, self.reachable_color) {
@@ -182,6 +183,7 @@ impl Objects {
                         queue.push(*v);
                     }
                 }
+                true
             }
             Val::Struct(id) => {
                 if let Some(strct) = self.structs.maybe_color(id, self.reachable_color) {
@@ -189,9 +191,11 @@ impl Objects {
                         queue.push(*v);
                     }
                 }
+                true
             }
             Val::NativeFunction(id) => {
                 self.native_functions.maybe_color(id, self.reachable_color);
+                true
             }
             Val::BytecodeFunction { id, captures } => {
                 if let Some(f) = self
@@ -199,10 +203,11 @@ impl Objects {
                     .maybe_color(id, self.reachable_color)
                 {
                     queue.extend(f.iter_references().filter(|v| v.requires_gc()));
-                    if let Some(lst) = captures {
-                        queue.push(Val::List(lst));
-                    }
                 }
+                if let Some(lst) = captures {
+                    queue.push(Val::List(lst));
+                }
+                true
             }
             Val::Custom(id) => {
                 if let Some(obj) = self.custom.maybe_color(id, self.reachable_color) {
@@ -210,6 +215,7 @@ impl Objects {
                         queue.push(*val);
                     }
                 }
+                true
             }
             Val::Box(id) => {
                 if let Some(v) = self.boxes.maybe_color(id, self.reachable_color) {
@@ -217,6 +223,7 @@ impl Objects {
                         queue.push(*v);
                     }
                 }
+                true
             }
             Val::Void
             | Val::Bool(_)
@@ -224,8 +231,9 @@ impl Objects {
             | Val::Float(_)
             | Val::Symbol(_)
             | Val::ShortString(_)
-            | Val::DataType(_) => (),
-        }
+            | Val::DataType(_) => false,
+        };
+        debug_assert_eq!(has_gc, val.requires_gc(), "{val:?}");
     }
 
     /// Sweeps the object store to collect garbage.
