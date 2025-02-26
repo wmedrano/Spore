@@ -1,3 +1,5 @@
+use compact_str::CompactString;
+
 use crate::{val::Val, vm::Vm};
 
 /// Represents a constant value.
@@ -25,7 +27,23 @@ impl Constant<'_> {
             Constant::Int(x) => Val::Int(x),
             Constant::Float(x) => Val::Float(x),
             Constant::Symbol(x) => vm.make_symbol(x),
-            Constant::String(x) => vm.make_string(x),
+            Constant::String(x) => {
+                let mut ch_iter = x.chars();
+                let mut s = CompactString::default();
+                while let Some(next) = ch_iter.next() {
+                    match next {
+                        '\\' => match ch_iter.next() {
+                            Some('n') => s.push('\n'),
+                            Some('r') => s.push('\r'),
+                            Some('t') => s.push('\t'),
+                            Some(ch) => s.push(ch),
+                            None => {}
+                        },
+                        ch => s.push(ch),
+                    }
+                }
+                vm.make_string(s)
+            }
         }
     }
 }
@@ -86,5 +104,123 @@ impl<'a> ParsedText<'a> {
             return Some(ParsedText::Constant(Constant::Symbol(stripped)));
         }
         None
+    }
+
+    #[cfg(test)]
+    fn as_constant(&self) -> Option<&Constant<'a>> {
+        match self {
+            ParsedText::Constant(c) => Some(c),
+            _ => None,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn void_const_turns_to_void() {
+        assert_eq!(Constant::Void.to_val(&mut Vm::default()), Val::Void);
+    }
+
+    #[test]
+    fn bool_is_parsed() {
+        let mut vm = Vm::default();
+        assert_eq!(
+            ParsedText::new("true")
+                .as_constant()
+                .unwrap()
+                .to_val(&mut vm),
+            Val::Bool(true)
+        );
+        assert_eq!(
+            ParsedText::new("false")
+                .as_constant()
+                .unwrap()
+                .to_val(&mut vm),
+            Val::Bool(false)
+        );
+    }
+
+    #[test]
+    fn int_is_parsed() {
+        let mut vm = Vm::default();
+        assert_eq!(
+            ParsedText::new("-1000000")
+                .as_constant()
+                .unwrap()
+                .to_val(&mut vm),
+            Val::Int(-1000000)
+        );
+        assert_eq!(
+            ParsedText::new("1000000")
+                .as_constant()
+                .unwrap()
+                .to_val(&mut vm),
+            Val::Int(1000000)
+        );
+    }
+
+    #[test]
+    fn float_is_parsed() {
+        let mut vm = Vm::default();
+        assert_eq!(
+            ParsedText::new("-0.1")
+                .as_constant()
+                .unwrap()
+                .to_val(&mut vm),
+            Val::Float(-0.1)
+        );
+        assert_eq!(
+            ParsedText::new("0.1")
+                .as_constant()
+                .unwrap()
+                .to_val(&mut vm),
+            Val::Float(0.1)
+        );
+    }
+
+    #[test]
+    fn symbol_is_parsed() {
+        let mut vm = Vm::default();
+        let symbol_val = vm.make_symbol("symbol");
+        assert_eq!(
+            ParsedText::new("'symbol")
+                .as_constant()
+                .unwrap()
+                .to_val(&mut vm),
+            symbol_val
+        );
+        assert_eq!(
+            ParsedText::new(":symbol")
+                .as_constant()
+                .unwrap()
+                .to_val(&mut vm),
+            symbol_val
+        );
+    }
+
+    #[test]
+    fn string_is_parsed() {
+        let mut vm = Vm::default();
+        let val = ParsedText::new("\"hello world\"")
+            .as_constant()
+            .unwrap()
+            .to_val(&mut vm);
+        assert_eq!(val.as_str(&vm).unwrap(), "hello world");
+    }
+
+    #[test]
+    fn string_escape_sequences_are_parsed() {
+        let mut vm = Vm::default();
+        let val = ParsedText::new(r#"" newline\n tab\t space\  quote\' quote\" backslash\\ ""#)
+            .as_constant()
+            .unwrap()
+            .to_val(&mut vm);
+        assert_eq!(
+            val.as_str(&vm).unwrap(),
+            " newline\n tab\t space  quote' quote\" backslash\\ "
+        );
     }
 }

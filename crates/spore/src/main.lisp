@@ -1,8 +1,6 @@
 (define exit? (box false))
 (define text-window (struct :text (new-rope "") :cursor 0))
 (define windows (list text-window))
-(define newline-str "
-")
 
 (define (handle-event! event)
     (when (= event "<esc>")
@@ -36,6 +34,6 @@
     (window-move-cursor! window 1)
     (return))
   (when (= event "<enter>")
-    (window-insert-text! window newline-str)
+    (window-insert-text! window "\n")
     (return))
   (window-insert-text! window event))
