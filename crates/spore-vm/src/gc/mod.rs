@@ -132,7 +132,13 @@ impl Objects {
             self.mark_many(module.values.values().copied(), &mut queue, &mut tmp_queue);
         }
         for frame in stack_frames {
-            self.mark_many(frame.function_val().into_iter(), &mut queue, &mut tmp_queue);
+            if let Some(id) = frame.function() {
+                self.mark_many(
+                    std::iter::once(Val::BytecodeFunction { id, captures: None }),
+                    &mut queue,
+                    &mut tmp_queue,
+                );
+            }
         }
         self.exhaust_queue(&mut queue, &mut tmp_queue);
     }
@@ -187,12 +193,19 @@ impl Objects {
             Val::NativeFunction(id) => {
                 self.native_functions.maybe_color(id, self.reachable_color);
             }
-            Val::BytecodeFunction { id } => {
+            Val::BytecodeFunction { id, captures } => {
                 if let Some(f) = self
                     .bytecode_functions
                     .maybe_color(id, self.reachable_color)
                 {
                     queue.extend(f.iter_references().filter(|v| v.requires_gc()));
+                }
+                if let Some(lst) =
+                    captures.and_then(|id| self.lists.maybe_color(id, self.reachable_color))
+                {
+                    for v in lst.iter().filter(|v| v.requires_gc()) {
+                        queue.push(*v);
+                    }
                 }
             }
             Val::Custom(id) => {

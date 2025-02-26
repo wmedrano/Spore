@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use ast::Ast;
 use bumpalo::Bump;
 use error::CompileError;
@@ -24,6 +26,8 @@ pub fn compile_module<'a>(
         vm,
         args: &[],
         locals: Vec::new(),
+        capturable: HashSet::new(),
+        captures: Vec::new(),
     };
     let ir = ir::Ir::with_ast(source, asts, arena)?;
     compiler.compile(

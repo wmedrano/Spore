@@ -52,6 +52,10 @@ impl ByteCodeFunction {
             .flat_map(|instruction| match instruction {
                 Instruction::Push(val) => Some(*val),
                 Instruction::Deref(symbol_id) => Some(Val::Symbol(*symbol_id)),
+                Instruction::Capture { id, .. } => Some(Val::BytecodeFunction {
+                    id: *id,
+                    captures: None,
+                }),
                 Instruction::Return
                 | Instruction::Eval(_)
                 | Instruction::Get(_)

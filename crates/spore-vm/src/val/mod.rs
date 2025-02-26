@@ -66,7 +66,10 @@ pub enum Val {
     /// Contains a native function.
     NativeFunction(ObjectId<NativeFunction>),
     /// Contains a bytecode function.
-    BytecodeFunction { id: ObjectId<ByteCodeFunction> },
+    BytecodeFunction {
+        id: ObjectId<ByteCodeFunction>,
+        captures: Option<ObjectId<SporeList>>,
+    },
     /// Contains a custom object.
     Custom(ObjectId<SporeCustom>),
     /// Holds a mutable value.
@@ -237,7 +240,7 @@ impl Val {
             Val::List(_) => DataType::List,
             Val::Struct(_) => DataType::StructT,
             Val::NativeFunction(_) => DataType::Function,
-            Val::BytecodeFunction { id: _ } => DataType::Function,
+            Val::BytecodeFunction { .. } => DataType::Function,
             Val::Custom(_) => DataType::Custom,
             Val::Box(_) => DataType::Box,
             Val::DataType(_) => DataType::DataType,
@@ -328,19 +331,20 @@ impl ValFormatter<'_> {
                     None => write!(f, "(native-fn-{})", object_id.as_num()),
                 }
             }
-            Val::BytecodeFunction { id: function } => {
-                match self.vm.objects.bytecode_functions.get(function) {
-                    Some(bc) => write!(
-                        f,
-                        "(fn-{})",
-                        match &bc.name {
-                            Some(s) => s.as_str(),
-                            None => "lambda",
-                        }
-                    ),
-                    None => write!(f, "(fn-{})", function.as_num()),
-                }
-            }
+            Val::BytecodeFunction {
+                id: function,
+                captures: _,
+            } => match self.vm.objects.bytecode_functions.get(function) {
+                Some(bc) => write!(
+                    f,
+                    "(fn-{})",
+                    match &bc.name {
+                        Some(s) => s.as_str(),
+                        None => "lambda",
+                    }
+                ),
+                None => write!(f, "(fn-{})", function.as_num()),
+            },
             Val::Custom(object_id) => match self.vm.objects.custom.get(object_id) {
                 Some(obj) => write!(f, "(custom-object-{})", obj.name()),
                 None => write!(f, "(gc-custom-object)"),

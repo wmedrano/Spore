@@ -40,8 +40,8 @@ pub struct StackFrame {
 
 impl StackFrame {
     /// Returns the backing function or `None` if the current function is a native function.
-    pub fn function_val(&self) -> Option<Val> {
-        self.function.map(|id| Val::BytecodeFunction { id })
+    pub fn function(&self) -> Option<ObjectId<ByteCodeFunction>> {
+        self.function
     }
 }
 
@@ -311,7 +311,13 @@ impl Vm {
         let asts = Ast::with_source(s)?;
         let bytecode = ByteCodeFunction::with_module_source(self, s, asts.iter(), &Bump::new())?;
         let bytecode_id = self.objects.register_bytecode(bytecode);
-        self.eval_function(Val::BytecodeFunction { id: bytecode_id }, &[])
+        self.eval_function(
+            Val::BytecodeFunction {
+                id: bytecode_id,
+                captures: None,
+            },
+            &[],
+        )
     }
 
     /// Evaluates the AST of Spore code.
@@ -324,7 +330,13 @@ impl Vm {
         let bytecode =
             ByteCodeFunction::with_module_source(self, s, std::iter::once(ast), &Bump::new())?;
         let bytecode_id = self.objects.register_bytecode(bytecode);
-        self.eval_function(Val::BytecodeFunction { id: bytecode_id }, &[])
+        self.eval_function(
+            Val::BytecodeFunction {
+                id: bytecode_id,
+                captures: None,
+            },
+            &[],
+        )
     }
 
     /// Evaluate a function and return its result.
@@ -383,8 +395,18 @@ impl Vm {
             Instruction::JumpIf(n) => self.execute_jump_if(*n)?,
             Instruction::Compact(n) => self.execute_compact(*n),
             Instruction::Return => self.execute_return(),
+            Instruction::Capture { id, capture_count } => self.execute_capture(*id, *capture_count),
         }
         Ok(())
+    }
+
+    fn execute_capture(&mut self, id: ObjectId<ByteCodeFunction>, capture_count: usize) {
+        let captures = Vec::from_iter(self.stack.drain(self.stack.len() - capture_count..));
+        let captures_id = self.objects.register_list(captures);
+        self.stack.push(Val::BytecodeFunction {
+            id,
+            captures: Some(captures_id),
+        });
     }
 
     /// Executes a return instruction.
@@ -439,6 +461,7 @@ impl Vm {
             }
             Val::BytecodeFunction {
                 id: bytecode_function,
+                captures,
             } => {
                 let function = self
                     .objects
@@ -454,6 +477,10 @@ impl Vm {
                 }
                 self.stack
                     .extend(std::iter::repeat_n(Val::Void, function.locals as usize));
+                if let Some(captures) = captures {
+                    let captures = Val::List(captures).as_list(self).unwrap().clone();
+                    self.stack.extend(&captures);
+                }
                 let previous_frame = std::mem::replace(
                     &mut self.stack_frame,
                     StackFrame {
@@ -653,6 +680,24 @@ mod tests {
                 .as_list(&vm)
                 .unwrap(),
             &[Val::Int(20), Val::Int(30), Val::Int(10)]
+        );
+    }
+
+    #[test]
+    fn variables_are_captured() {
+        let mut vm = Vm::default();
+        let source = r#"
+    (define (add-x-fn x)
+      (lambda (y) (+ x y)))
+
+    (define add-2 (add-x-fn 2))"#;
+        assert_eq!(vm.clean_eval_str(source), Ok(Val::Void));
+        let source = "(add-2 10)";
+        assert_eq!(
+            vm.clean_eval_str(source)
+                .map_err(|err| err.with_context(&vm, source).to_string())
+                .unwrap(),
+            Val::Int(12)
         );
     }
 }

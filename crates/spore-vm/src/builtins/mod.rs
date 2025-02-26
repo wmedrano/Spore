@@ -108,7 +108,16 @@ fn equal_fn_impl(vm: &Vm, a: Val, b: Val) -> bool {
                 }
         }
         (Val::NativeFunction(a), Val::NativeFunction(b)) => a == b,
-        (Val::BytecodeFunction { id: a }, Val::BytecodeFunction { id: b }) => a == b,
+        (
+            Val::BytecodeFunction {
+                id: a,
+                captures: captures_a,
+            },
+            Val::BytecodeFunction {
+                id: b,
+                captures: captures_b,
+            },
+        ) => a == b && captures_a == captures_b,
         (Val::Custom(a), Val::Custom(b)) => a == b,
         (Val::DataType(a), Val::DataType(b)) => a == b,
         _ => false,
