@@ -132,7 +132,7 @@ impl Objects {
             self.mark_many(module.values.values().copied(), &mut queue, &mut tmp_queue);
         }
         for frame in stack_frames {
-            if let Some(id) = frame.function() {
+            if let Some(id) = frame.function_id() {
                 self.mark_many(
                     std::iter::once(Val::BytecodeFunction { id, captures: None }),
                     &mut queue,

@@ -37,6 +37,8 @@ impl ShortString {
     }
 
     pub fn as_str(&self) -> &str {
+        // TODO: Consider using from_utf8_unchecked for better performance as the constructor
+        // ensures the `&str` is valid.
         std::str::from_utf8(&self.data[0..self.len as usize]).unwrap()
     }
 }
@@ -67,7 +69,9 @@ pub enum Val {
     NativeFunction(ObjectId<NativeFunction>),
     /// Contains a bytecode function.
     BytecodeFunction {
+        /// The id of the bytecode function.
         id: ObjectId<ByteCodeFunction>,
+        /// The variables captured by the bytecode function.
         captures: Option<ObjectId<SporeList>>,
     },
     /// Contains a custom object.
@@ -333,18 +337,21 @@ impl ValFormatter<'_> {
             }
             Val::BytecodeFunction {
                 id: function,
-                captures: _,
-            } => match self.vm.objects.bytecode_functions.get(function) {
-                Some(bc) => write!(
-                    f,
-                    "(fn-{})",
-                    match &bc.name {
-                        Some(s) => s.as_str(),
-                        None => "lambda",
-                    }
-                ),
-                None => write!(f, "(fn-{})", function.as_num()),
-            },
+                captures,
+            } => {
+                let suffix = if captures.is_some() { "*" } else { "" };
+                match self.vm.objects.bytecode_functions.get(function) {
+                    Some(bc) => write!(
+                        f,
+                        "(fn-{name}{suffix})",
+                        name = match &bc.name {
+                            Some(s) => s.as_str(),
+                            None => "lambda",
+                        },
+                    ),
+                    None => write!(f, "(fn-{num}{suffix})", num = function.as_num()),
+                }
+            }
             Val::Custom(object_id) => match self.vm.objects.custom.get(object_id) {
                 Some(obj) => write!(f, "(custom-object-{})", obj.name()),
                 None => write!(f, "(gc-custom-object)"),

@@ -39,8 +39,8 @@ pub struct StackFrame {
 }
 
 impl StackFrame {
-    /// Returns the backing function or `None` if the current function is a native function.
-    pub fn function(&self) -> Option<ObjectId<ByteCodeFunction>> {
+    /// Returns the backing function id or `None` if the current function is a native function.
+    pub fn function_id(&self) -> Option<ObjectId<ByteCodeFunction>> {
         self.function
     }
 }
@@ -400,15 +400,6 @@ impl Vm {
         Ok(())
     }
 
-    fn execute_capture(&mut self, id: ObjectId<ByteCodeFunction>, capture_count: usize) {
-        let captures = Vec::from_iter(self.stack.drain(self.stack.len() - capture_count..));
-        let captures_id = self.objects.register_list(captures);
-        self.stack.push(Val::BytecodeFunction {
-            id,
-            captures: Some(captures_id),
-        });
-    }
-
     /// Executes a return instruction.
     ///
     /// This function handles the `Return` instruction, which involves restoring the previous
@@ -478,8 +469,9 @@ impl Vm {
                 self.stack
                     .extend(std::iter::repeat_n(Val::Void, function.locals as usize));
                 if let Some(captures) = captures {
-                    let captures = Val::List(captures).as_list(self).unwrap().clone();
-                    self.stack.extend(&captures);
+                    if let Some(captures) = self.objects.get_list(captures) {
+                        self.stack.extend_from_slice(&captures);
+                    }
                 }
                 let previous_frame = std::mem::replace(
                     &mut self.stack_frame,
@@ -517,6 +509,16 @@ impl Vm {
     fn execute_compact(&mut self, n: usize) {
         assert!(n > 0);
         self.stack.drain(self.stack.len() - n..self.stack.len() - 1);
+    }
+
+    fn execute_capture(&mut self, id: ObjectId<ByteCodeFunction>, capture_count: u32) {
+        let stack_start = self.stack.len() - capture_count as usize;
+        let captures: Vec<_> = self.stack.drain(stack_start..).collect();
+        let captures_id = self.objects.register_list(captures);
+        self.stack.push(Val::BytecodeFunction {
+            id,
+            captures: Some(captures_id),
+        });
     }
 }
 

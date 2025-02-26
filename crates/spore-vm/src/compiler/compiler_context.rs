@@ -23,7 +23,9 @@ pub struct CompilerContext<'a> {
 }
 
 pub struct Capture {
+    /// The identifier for the variable to capture.
     identifier: CompactString,
+    /// The index of the instruction that wants to dereference a captured variable.
     instruction_index: usize,
 }
 
@@ -41,8 +43,8 @@ enum ResolvedVariable {
     Global(SymbolId),
 }
 
-fn swap_kv<K, V: std::hash::Hash + Eq>(m: HashMap<K, V>) -> HashMap<V, K> {
-    HashMap::from_iter(m.into_iter().map(|(k, v)| (v, k)))
+fn swap_kv<K: Clone, V: Clone + std::hash::Hash + Eq>(m: &HashMap<K, V>) -> HashMap<V, K> {
+    HashMap::from_iter(m.into_iter().map(|(k, v)| (v.clone(), k.clone())))
 }
 
 impl<'a> CompilerContext<'a> {
@@ -55,6 +57,18 @@ impl<'a> CompilerContext<'a> {
             }
         }
         ret
+    }
+
+    pub fn compile_many(
+        &mut self,
+        context: CompilerScope,
+        irs: impl Iterator<Item = &'a Ir<'a>>,
+    ) -> Result<Vec<Instruction>, IrError> {
+        let mut dst = Vec::new();
+        for expr in irs {
+            self.compile(&mut dst, context, expr)?;
+        }
+        Ok(dst)
     }
 
     /// Compiles an IR into bytecode instructions.
@@ -176,6 +190,44 @@ impl<'a> CompilerContext<'a> {
         Ok(())
     }
 
+    fn fix_captures(
+        &self,
+        instructions: &mut Vec<Instruction>,
+        capture_to_idx: &HashMap<CompactString, u32>,
+    ) {
+        for capture in self.captures.iter() {
+            let capture_idx = *capture_to_idx.get(&capture.identifier).unwrap() as usize;
+            let instruction = Instruction::Get(self.args.len() + self.locals.len() + capture_idx);
+            instructions[capture.instruction_index] = instruction;
+        }
+    }
+
+    fn compile_capture_derefs(
+        &mut self,
+        dst: &mut Vec<Instruction>,
+        capture_to_idx: &HashMap<CompactString, u32>,
+    ) {
+        let idx_to_capture = swap_kv(capture_to_idx);
+        for idx in 0..idx_to_capture.len() as u32 {
+            let identifier = idx_to_capture.get(&idx).unwrap();
+            self.compile_deref(dst, identifier);
+        }
+    }
+
+    pub fn new(
+        vm: &'a mut Vm,
+        args: &'a [&str],
+        capturable: HashSet<CompactString>,
+    ) -> CompilerContext<'a> {
+        CompilerContext {
+            vm,
+            args,
+            locals: Vec::new(),
+            capturable,
+            captures: Vec::new(),
+        }
+    }
+
     fn compile_lambda(
         &mut self,
         dst: &mut Vec<Instruction>,
@@ -183,53 +235,36 @@ impl<'a> CompilerContext<'a> {
         args: &[&str],
         exprs: &[Ir],
     ) -> Result<(), IrError> {
-        let capturable = HashSet::from_iter(
-            self.capturable
-                .iter()
-                .cloned()
-                .chain(self.locals.iter().map(|s| CompactString::new(s)))
-                .chain(self.args.iter().map(|s| CompactString::new(s))),
-        );
-        let mut compiler = CompilerContext {
-            vm: self.vm,
+        let mut compiler = CompilerContext::new(
+            self.vm,
             args,
-            locals: Vec::new(),
-            capturable,
-            captures: Vec::new(),
-        };
-        let mut lambda_instructions = Vec::new();
-        for expr in exprs.iter() {
-            compiler.compile(&mut lambda_instructions, CompilerScope::Lambda, expr)?;
-        }
-        let locals = compiler.locals.len() as u32;
+            HashSet::from_iter(
+                self.capturable
+                    .iter()
+                    .cloned()
+                    .chain(self.locals.iter().map(|s| CompactString::new(s)))
+                    .chain(self.args.iter().map(|s| CompactString::new(s))),
+            ),
+        );
+        let mut lambda_instructions = compiler.compile_many(CompilerScope::Lambda, exprs.iter())?;
         let capture_to_idx = compiler.capture_to_idx();
-        let idx_to_capture = swap_kv(capture_to_idx.clone());
-        let capture_count = capture_to_idx.len();
-        for capture in compiler.captures.iter() {
-            let capture_idx = *capture_to_idx.get(&capture.identifier).unwrap() as usize;
-            let instruction =
-                Instruction::Get(compiler.args.len() + compiler.locals.len() + capture_idx);
-            lambda_instructions[capture.instruction_index] = instruction;
-        }
-        for idx in 0..capture_count as u32 {
-            let identifier = idx_to_capture.get(&idx).unwrap();
-            self.compile_deref(dst, identifier);
-        }
-        let lambda = ByteCodeFunction {
+        compiler.fix_captures(&mut lambda_instructions, &capture_to_idx);
+        let locals = compiler.locals.len() as u32;
+        let lambda_id = self.vm.objects.register_bytecode(ByteCodeFunction {
             name: name.map(CompactString::new),
             instructions: lambda_instructions.into(),
             args: args.len() as u32,
             locals,
-        };
-        let lambda_id = self.vm.objects.register_bytecode(lambda);
-        if capture_count == 0 {
+        });
+        if capture_to_idx.is_empty() {
             dst.push(Instruction::Push(Val::BytecodeFunction {
                 id: lambda_id,
                 captures: None,
             }));
         } else {
+            self.compile_capture_derefs(dst, &capture_to_idx);
             dst.push(Instruction::Capture {
-                capture_count,
+                capture_count: capture_to_idx.len() as u32,
                 id: lambda_id,
             });
         }

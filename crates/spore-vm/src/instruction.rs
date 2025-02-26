@@ -25,9 +25,11 @@ pub enum Instruction {
     JumpIf(usize),
     /// Compact the last N elements, leaving only the top one.
     Compact(usize),
+    /// Combine the top `capture_count` values of the stack with `id` to push a new `Val` containing
+    /// the lambda with its captured environment.
     Capture {
         id: ObjectId<ByteCodeFunction>,
-        capture_count: usize,
+        capture_count: u32,
     },
 }
 
