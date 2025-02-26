@@ -470,7 +470,7 @@ impl Vm {
                     .extend(std::iter::repeat_n(Val::Void, function.locals as usize));
                 if let Some(captures) = captures {
                     if let Some(captures) = self.objects.get_list(captures) {
-                        self.stack.extend_from_slice(&captures);
+                        self.stack.extend_from_slice(captures);
                     }
                 }
                 let previous_frame = std::mem::replace(

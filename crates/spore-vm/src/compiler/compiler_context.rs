@@ -18,7 +18,7 @@ pub struct CompilerContext<'a> {
     pub vm: &'a mut Vm,
     pub args: &'a [&'a str],
     pub locals: Vec<&'a str>,
-    pub capturable: HashSet<CompactString>,
+    pub capturable: HashSet<&'a str>,
     pub captures: Vec<Capture>,
 }
 
@@ -44,7 +44,7 @@ enum ResolvedVariable {
 }
 
 fn swap_kv<K: Clone, V: Clone + std::hash::Hash + Eq>(m: &HashMap<K, V>) -> HashMap<V, K> {
-    HashMap::from_iter(m.into_iter().map(|(k, v)| (v.clone(), k.clone())))
+    HashMap::from_iter(m.iter().map(|(k, v)| (v.clone(), k.clone())))
 }
 
 impl<'a> CompilerContext<'a> {
@@ -192,7 +192,7 @@ impl<'a> CompilerContext<'a> {
 
     fn fix_captures(
         &self,
-        instructions: &mut Vec<Instruction>,
+        instructions: &mut [Instruction],
         capture_to_idx: &HashMap<CompactString, u32>,
     ) {
         for capture in self.captures.iter() {
@@ -217,7 +217,7 @@ impl<'a> CompilerContext<'a> {
     pub fn new(
         vm: &'a mut Vm,
         args: &'a [&str],
-        capturable: HashSet<CompactString>,
+        capturable: HashSet<&'a str>,
     ) -> CompilerContext<'a> {
         CompilerContext {
             vm,
@@ -241,9 +241,9 @@ impl<'a> CompilerContext<'a> {
             HashSet::from_iter(
                 self.capturable
                     .iter()
-                    .cloned()
-                    .chain(self.locals.iter().map(|s| CompactString::new(s)))
-                    .chain(self.args.iter().map(|s| CompactString::new(s))),
+                    .copied()
+                    .chain(self.locals.iter().copied())
+                    .chain(self.args.iter().copied()),
             ),
         );
         let mut lambda_instructions = compiler.compile_many(CompilerScope::Lambda, exprs.iter())?;
