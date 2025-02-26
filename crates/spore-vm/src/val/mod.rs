@@ -37,6 +37,8 @@ impl ShortString {
     }
 
     pub fn as_str(&self) -> &str {
+        // TODO: Consider using from_utf8_unchecked for better performance as the constructor
+        // ensures the `&str` is valid.
         std::str::from_utf8(&self.data[0..self.len as usize]).unwrap()
     }
 }
@@ -66,7 +68,12 @@ pub enum Val {
     /// Contains a native function.
     NativeFunction(ObjectId<NativeFunction>),
     /// Contains a bytecode function.
-    BytecodeFunction { id: ObjectId<ByteCodeFunction> },
+    BytecodeFunction {
+        /// The id of the bytecode function.
+        id: ObjectId<ByteCodeFunction>,
+        /// The variables captured by the bytecode function.
+        captures: Option<ObjectId<SporeList>>,
+    },
     /// Contains a custom object.
     Custom(ObjectId<SporeCustom>),
     /// Holds a mutable value.
@@ -237,7 +244,7 @@ impl Val {
             Val::List(_) => DataType::List,
             Val::Struct(_) => DataType::StructT,
             Val::NativeFunction(_) => DataType::Function,
-            Val::BytecodeFunction { id: _ } => DataType::Function,
+            Val::BytecodeFunction { .. } => DataType::Function,
             Val::Custom(_) => DataType::Custom,
             Val::Box(_) => DataType::Box,
             Val::DataType(_) => DataType::DataType,
@@ -328,17 +335,21 @@ impl ValFormatter<'_> {
                     None => write!(f, "(native-fn-{})", object_id.as_num()),
                 }
             }
-            Val::BytecodeFunction { id: function } => {
+            Val::BytecodeFunction {
+                id: function,
+                captures,
+            } => {
+                let suffix = if captures.is_some() { "*" } else { "" };
                 match self.vm.objects.bytecode_functions.get(function) {
                     Some(bc) => write!(
                         f,
-                        "(fn-{})",
-                        match &bc.name {
+                        "(fn-{name}{suffix})",
+                        name = match &bc.name {
                             Some(s) => s.as_str(),
                             None => "lambda",
-                        }
+                        },
                     ),
-                    None => write!(f, "(fn-{})", function.as_num()),
+                    None => write!(f, "(fn-{num}{suffix})", num = function.as_num()),
                 }
             }
             Val::Custom(object_id) => match self.vm.objects.custom.get(object_id) {

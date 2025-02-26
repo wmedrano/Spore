@@ -19,17 +19,11 @@ pub fn compile_module<'a>(
     asts: impl Iterator<Item = &'a Ast>,
     arena: &'a Bump,
 ) -> Result<SporeRc<[Instruction]>, CompileError> {
-    let mut instructions = Vec::new();
-    let mut compiler = compiler_context::CompilerContext {
-        vm,
-        args: &[],
-        locals: Vec::new(),
-    };
+    let mut compiler = compiler_context::CompilerContext::new(vm);
     let ir = ir::Ir::with_ast(source, asts, arena)?;
-    compiler.compile(
-        &mut instructions,
+    let instructions = compiler.compile_to_instructions(
         compiler_context::CompilerScope::Module,
-        &ir,
+        std::iter::once(&ir),
     )?;
     if !compiler.locals.is_empty() {
         return Err(CompileError::ModuleCompilationFoundUnexpectedLocalVariables);

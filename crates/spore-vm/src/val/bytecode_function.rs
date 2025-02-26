@@ -21,6 +21,8 @@ pub struct ByteCodeFunction {
     pub args: u32,
     /// The number of local variables.
     pub locals: u32,
+    /// The number of variables that are captured.
+    pub captures: u32,
 }
 
 impl ByteCodeFunction {
@@ -42,6 +44,7 @@ impl ByteCodeFunction {
             instructions,
             args: 0,
             locals: 0,
+            captures: 0,
         })
     }
 
@@ -52,6 +55,10 @@ impl ByteCodeFunction {
             .flat_map(|instruction| match instruction {
                 Instruction::Push(val) => Some(*val),
                 Instruction::Deref(symbol_id) => Some(Val::Symbol(*symbol_id)),
+                Instruction::Capture { id, .. } => Some(Val::BytecodeFunction {
+                    id: *id,
+                    captures: None,
+                }),
                 Instruction::Return
                 | Instruction::Eval(_)
                 | Instruction::Get(_)

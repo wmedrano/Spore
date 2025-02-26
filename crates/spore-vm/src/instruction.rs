@@ -1,5 +1,6 @@
 use crate::{
-    val::{symbol::SymbolId, Val},
+    gc::ObjectId,
+    val::{bytecode_function::ByteCodeFunction, symbol::SymbolId, Val},
     vm::Vm,
 };
 
@@ -24,6 +25,12 @@ pub enum Instruction {
     JumpIf(usize),
     /// Compact the last N elements, leaving only the top one.
     Compact(usize),
+    /// Combine the top `capture_count` values of the stack with `id` to push a new `Val` containing
+    /// the lambda with its captured environment.
+    Capture {
+        id: ObjectId<ByteCodeFunction>,
+        capture_count: u32,
+    },
 }
 
 pub struct InstructionFormatter<'a> {
@@ -54,6 +61,9 @@ impl std::fmt::Display for InstructionFormatter<'_> {
             Instruction::Jump(n) => write!(f, "Jump({n})"),
             Instruction::JumpIf(n) => write!(f, "JumpIf({n})"),
             Instruction::Compact(n) => write!(f, "Compact({n})"),
+            Instruction::Capture { capture_count, id } => {
+                write!(f, "Capture({id:?}, {capture_count})")
+            }
         }
     }
 }
