@@ -58,7 +58,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 #[derive(Copy, Clone)]
 pub struct Symbols {
     cursor: SymbolId,
-    exit_p: SymbolId,
+    percent_exit_p: SymbolId,
     text: SymbolId,
     windows: SymbolId,
 }
@@ -67,7 +67,7 @@ impl Symbols {
     fn new(vm: &mut Vm) -> Symbols {
         Symbols {
             cursor: vm.make_symbol_id("cursor"),
-            exit_p: vm.make_symbol_id("exit?"),
+            percent_exit_p: vm.make_symbol_id("%exit?"),
             text: vm.make_symbol_id("text"),
             windows: vm.make_symbol_id("windows"),
         }
@@ -79,7 +79,7 @@ fn run(vm: &mut Vm, mut terminal: DefaultTerminal) -> Result<Stats, Box<dyn std:
     let mut stats = Stats::default();
     vm.clean_eval_str(include_str!("main.lisp")).unwrap();
     while !vm
-        .get_global(symbols.exit_p)
+        .get_global(symbols.percent_exit_p)
         .unwrap_or_default()
         .maybe_unbox(vm)
         .is_truthy()
