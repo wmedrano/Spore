@@ -199,12 +199,8 @@ impl Objects {
                     .maybe_color(id, self.reachable_color)
                 {
                     queue.extend(f.iter_references().filter(|v| v.requires_gc()));
-                }
-                if let Some(lst) =
-                    captures.and_then(|id| self.lists.maybe_color(id, self.reachable_color))
-                {
-                    for v in lst.iter().filter(|v| v.requires_gc()) {
-                        queue.push(*v);
+                    if let Some(lst) = captures {
+                        queue.push(Val::List(lst));
                     }
                 }
             }

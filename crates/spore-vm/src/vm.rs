@@ -468,10 +468,22 @@ impl Vm {
                 }
                 self.stack
                     .extend(std::iter::repeat_n(Val::Void, function.locals as usize));
-                if let Some(captures) = captures {
-                    if let Some(captures) = self.objects.get_list(captures) {
+                let actual_captures = match captures {
+                    Some(captures) => {
+                        let captures = self.objects.get_list(captures).ok_or_else(|| {
+                            VmError::InterpreterBug(CompactString::new(
+                                "captures not registered with VM",
+                            ))
+                        })?;
                         self.stack.extend_from_slice(captures);
+                        captures.len() as u32
                     }
+                    None => 0,
+                };
+                if actual_captures != function.captures {
+                    return Err(VmError::InterpreterBug(CompactString::new(
+                        "wrong number of captures for lambda",
+                    )));
                 }
                 let previous_frame = std::mem::replace(
                     &mut self.stack_frame,

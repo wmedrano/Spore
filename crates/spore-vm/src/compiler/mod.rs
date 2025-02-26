@@ -1,5 +1,3 @@
-use std::collections::HashSet;
-
 use ast::Ast;
 use bumpalo::Bump;
 use error::CompileError;
@@ -21,15 +19,9 @@ pub fn compile_module<'a>(
     asts: impl Iterator<Item = &'a Ast>,
     arena: &'a Bump,
 ) -> Result<SporeRc<[Instruction]>, CompileError> {
-    let mut compiler = compiler_context::CompilerContext {
-        vm,
-        args: &[],
-        locals: Vec::new(),
-        capturable: HashSet::new(),
-        captures: Vec::new(),
-    };
+    let mut compiler = compiler_context::CompilerContext::new(vm);
     let ir = ir::Ir::with_ast(source, asts, arena)?;
-    let instructions = compiler.compile_many(
+    let instructions = compiler.compile_to_instructions(
         compiler_context::CompilerScope::Module,
         std::iter::once(&ir),
     )?;
