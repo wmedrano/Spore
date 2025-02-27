@@ -5,16 +5,25 @@ use crate::{
 
 pub fn register(vm: &mut Vm) {
     vm.register_native_function(NativeFunction::new("list", list_fn))
+        .register_native_function(NativeFunction::with_args_2("list-concat", list_concat_fn))
         .register_native_function(NativeFunction::with_args_2("doall", doall_fn))
         .register_native_function(NativeFunction::with_args_2("map", map_fn))
         .register_native_function(NativeFunction::with_args_2("filter", filter_fn))
         .register_native_function(NativeFunction::with_args_1("list-len", list_len_fn))
+        .register_native_function(NativeFunction::with_args_1("list-empty?", list_empty_fn))
         .register_native_function(NativeFunction::with_args_2("nth", nth_fn));
 }
 
 fn list_fn(vm: &mut Vm) -> VmResult<Val> {
     let args = vm.args().to_vec();
     Ok(vm.make_list(args))
+}
+
+fn list_concat_fn(vm: &mut Vm, a: Val, b: Val) -> VmResult<Val> {
+    let a = a.as_list(vm).ok_or_else(|| VmError::WrongType)?;
+    let b = b.as_list(vm).ok_or_else(|| VmError::WrongType)?;
+    let c = Vec::from_iter(a.iter().chain(b.iter()).copied());
+    Ok(vm.make_list(c))
 }
 
 fn doall_fn(vm: &mut Vm, f: Val, lst: Val) -> VmResult<Val> {
@@ -59,6 +68,10 @@ fn list_len_fn(vm: &mut Vm, lst: Val) -> VmResult<Val> {
     Ok(Val::Int(lst.len() as i64))
 }
 
+fn list_empty_fn(vm: &mut Vm, lst: Val) -> VmResult<Val> {
+    let lst = lst.as_list(vm).ok_or_else(|| VmError::WrongType)?;
+    Ok(Val::Bool(lst.is_empty()))
+}
 fn nth_fn(vm: &mut Vm, lst: Val, idx: Val) -> VmResult<Val> {
     let idx = match idx {
         Val::Int(x) => {

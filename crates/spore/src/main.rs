@@ -60,7 +60,7 @@ pub struct Symbols {
     cursor: SymbolId,
     percent_exit_p: SymbolId,
     text: SymbolId,
-    windows: SymbolId,
+    percent_windows: SymbolId,
 }
 
 impl Symbols {
@@ -69,7 +69,7 @@ impl Symbols {
             cursor: vm.make_symbol_id("cursor"),
             percent_exit_p: vm.make_symbol_id("%exit?"),
             text: vm.make_symbol_id("text"),
-            windows: vm.make_symbol_id("windows"),
+            percent_windows: vm.make_symbol_id("%windows"),
         }
     }
 }
@@ -77,7 +77,10 @@ impl Symbols {
 fn run(vm: &mut Vm, mut terminal: DefaultTerminal) -> Result<Stats, Box<dyn std::error::Error>> {
     let symbols = Symbols::new(vm);
     let mut stats = Stats::default();
-    vm.clean_eval_str(include_str!("main.lisp")).unwrap();
+    vm.clean_eval_str(include_str!("../lisp/window.lisp"))
+        .unwrap();
+    vm.clean_eval_str(include_str!("../lisp/main.lisp"))
+        .unwrap();
     while !vm
         .get_global(symbols.percent_exit_p)
         .unwrap_or_default()
@@ -108,7 +111,12 @@ fn handle_events(vm: &mut Vm) -> Result<(), VmError> {
 
 fn draw(frame: &mut Frame, vm: &Vm, symbols: &Symbols) {
     frame.render_widget(ratatui::widgets::Clear, frame.area());
-    let windows = vm.get_global(symbols.windows).unwrap().as_list(vm).unwrap();
+    let windows = vm
+        .get_global(symbols.percent_windows)
+        .unwrap()
+        .maybe_unbox(vm)
+        .as_list(vm)
+        .unwrap();
     for window in windows {
         let window_struct = window.as_struct(vm).unwrap();
         let text = window_struct

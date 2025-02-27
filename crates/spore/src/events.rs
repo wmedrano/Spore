@@ -16,8 +16,17 @@ pub fn events(timeout: Duration) -> impl Iterator<Item = CompactString> {
                 kind: KeyEventKind::Press,
                 ..
             }) => {
-                let has_shift = modifiers.contains(KeyModifiers::SHIFT);
-                let prefix = if has_shift { "s-" } else { "" };
+                let is_char = matches!(code, KeyCode::Char(_));
+                let mut prefix = CompactString::new("");
+                if modifiers.contains(KeyModifiers::CONTROL) {
+                    prefix.push_str("c-");
+                }
+                if modifiers.contains(KeyModifiers::ALT) {
+                    prefix.push_str("a-");
+                }
+                if modifiers.contains(KeyModifiers::SHIFT) && !is_char {
+                    prefix.push_str("s-");
+                }
                 match code {
                     KeyCode::Backspace => Some(format_compact!("<{prefix}backspace>")),
                     KeyCode::Enter => Some(format_compact!("<{prefix}enter>")),
@@ -34,7 +43,13 @@ pub fn events(timeout: Duration) -> impl Iterator<Item = CompactString> {
                     KeyCode::Delete => Some(format_compact!("<{prefix}delete>")),
                     KeyCode::Insert => Some(format_compact!("<{prefix}insert>")),
                     KeyCode::F(n) => Some(format_compact!("<{prefix}f{n}>")),
-                    KeyCode::Char(ch) => Some(format_compact!("{ch}")),
+                    KeyCode::Char(ch) => {
+                        if prefix.is_empty() {
+                            Some(format_compact!("{ch}"))
+                        } else {
+                            Some(format_compact!("<{prefix}{ch}>"))
+                        }
+                    }
                     KeyCode::Null => Some(format_compact!("<{prefix}null>")),
                     KeyCode::Esc => Some(format_compact!("<{prefix}esc>")),
                     KeyCode::CapsLock => Some(format_compact!("<{prefix}caps-lock>")),
