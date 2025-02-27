@@ -2,10 +2,7 @@ use std::time::Duration;
 
 use clap::{Parser, ValueEnum};
 use ratatui::{DefaultTerminal, Frame};
-use spore_vm::{
-    val::symbol::SymbolId,
-    vm::{Vm, VmError},
-};
+use spore_vm::{error::VmResult, val::symbol::SymbolId, vm::Vm};
 use widgets::BufferWidget;
 
 mod events;
@@ -100,7 +97,7 @@ fn run(vm: &mut Vm, mut terminal: DefaultTerminal) -> Result<Stats, Box<dyn std:
     Ok(stats)
 }
 
-fn handle_events(vm: &mut Vm) -> Result<(), VmError> {
+fn handle_events(vm: &mut Vm) -> VmResult<()> {
     for event in events::events(Duration::from_secs(1)) {
         let f = vm.get_global_by_name("handle-event!").unwrap();
         let s = vm.make_string(event.clone());

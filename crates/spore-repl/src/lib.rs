@@ -1,7 +1,8 @@
 use rustyline::error::ReadlineError;
 use spore_vm::{
     compiler::ast::{Ast, AstError},
-    vm::{Vm, VmError, VmErrorInner, VmResult},
+    error::{VmError, VmResult},
+    vm::Vm,
 };
 
 /// REPL for Spore VM.
@@ -52,13 +53,12 @@ impl Repl {
                                         println!("{out}")
                                     }
                                 }
-                                Err(err) => match *err.0 {
-                                    VmErrorInner::InterpreterBug(_) => return Err(err),
+                                Err(err) => match err {
+                                    VmError::InterpreterBug(_) => return Err(err),
                                     err => {
                                         println!(
                                             "Error: {}",
-                                            VmError(Box::new(err))
-                                                .with_context(&self.vm, &input_text)
+                                            err.with_context(&self.vm, &input_text)
                                         )
                                     }
                                 },
@@ -127,7 +127,6 @@ mod tests {
     use spore_vm::compiler::ast::AstError;
     use spore_vm::compiler::error::CompileError;
     use spore_vm::compiler::span::Span;
-    use spore_vm::vm::VmErrorInner;
 
     #[test]
     fn execute_prints_final_value() {
@@ -148,13 +147,9 @@ mod tests {
         let mut repl = Repl::new(Vm::default());
         assert_eq!(
             repl.execute_to_string(")"),
-            Err(
-                VmErrorInner::Compile(CompileError::Ast(AstError::UnexpectedCloseParen(Span {
-                    start: 0,
-                    end: 1
-                })))
-                .into()
-            )
+            Err(VmError::Compile(CompileError::Ast(
+                AstError::UnexpectedCloseParen(Span { start: 0, end: 1 })
+            )))
         );
     }
 
@@ -164,7 +159,7 @@ mod tests {
         let got = repl.execute_to_string("(undefined)");
         assert_eq!(
             got,
-            Err(VmErrorInner::SymbolNotFound(repl.vm.make_symbol_id("undefined")).into())
+            Err(VmError::SymbolNotFound(repl.vm.make_symbol_id("undefined")))
         );
     }
 }

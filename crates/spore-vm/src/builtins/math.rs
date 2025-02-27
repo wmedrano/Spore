@@ -1,6 +1,7 @@
 use crate::{
+    error::{VmError, VmResult},
     val::{native_function::NativeFunction, Val},
-    vm::{Vm, VmErrorInner, VmResult},
+    vm::Vm,
 };
 
 pub fn register(vm: &mut Vm) {
@@ -18,7 +19,7 @@ fn plus_fn(_: &Vm, args: &[Val]) -> VmResult<Val> {
         match arg {
             Val::Int(x) => int_sum += *x,
             Val::Float(x) => float_sum += *x,
-            _ => return Err(VmErrorInner::WrongType)?,
+            _ => return Err(VmError::WrongType)?,
         }
     }
     let res = if float_sum == 0.0 {
@@ -32,7 +33,7 @@ fn plus_fn(_: &Vm, args: &[Val]) -> VmResult<Val> {
 /// Subtracts all arguments from the first. If there is only one argument, then it is negated.
 fn minus_fn(vm: &Vm, args: &[Val]) -> VmResult<Val> {
     match args {
-        [] => Err(VmErrorInner::WrongArity {
+        [] => Err(VmError::WrongArity {
             name: "-".into(),
             expected: 1,
             actual: 0,
@@ -67,7 +68,7 @@ fn less_fn(_: &Vm, args: &[Val]) -> VmResult<Val> {
         (Val::Float(a), Val::Float(b)) => Ok(a < b),
         (Val::Int(a), Val::Float(b)) => Ok((a as f64) < b),
         (Val::Float(a), Val::Int(b)) => Ok(a < (b as f64)),
-        _ => Err(VmErrorInner::WrongType)?,
+        _ => Err(VmError::WrongType)?,
     })
 }
 
@@ -78,16 +79,13 @@ fn greater_fn(_: &Vm, args: &[Val]) -> VmResult<Val> {
         (Val::Float(a), Val::Float(b)) => Ok(a > b),
         (Val::Int(a), Val::Float(b)) => Ok((a as f64) > b),
         (Val::Float(a), Val::Int(b)) => Ok(a > (b as f64)),
-        _ => Err(VmErrorInner::WrongType)?,
+        _ => Err(VmError::WrongType)?,
     })
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        val::Val,
-        vm::{Vm, VmErrorInner},
-    };
+    use crate::{error::VmError, val::Val, vm::Vm};
 
     #[test]
     fn empty_plus_is_0() {
@@ -99,8 +97,9 @@ mod tests {
     fn plus_with_non_number_returns_error() {
         let mut vm = Vm::default();
         assert_eq!(
-            vm.clean_eval_str("(+ -1 2 -3 4 false)"),
-            Err(VmErrorInner::WrongType.into())
+            vm.clean_eval_str("(+ -1 2 -3 4 false)")
+                .map_err(VmError::from),
+            Err(VmError::WrongType)
         );
     }
 
@@ -127,8 +126,8 @@ mod tests {
     fn minus_with_no_args_returns_error() {
         let mut vm = Vm::default();
         assert_eq!(
-            vm.clean_eval_str("(-)"),
-            Err(VmErrorInner::WrongArity {
+            vm.clean_eval_str("(-)").map_err(VmError::from),
+            Err(VmError::WrongArity {
                 name: "-".into(),
                 expected: 1,
                 actual: 0
@@ -198,8 +197,8 @@ mod tests {
     fn less_with_non_number_returns_error() {
         let mut vm = Vm::default();
         assert_eq!(
-            vm.clean_eval_str("(< false true)"),
-            Err(VmErrorInner::WrongType.into())
+            vm.clean_eval_str("(< false true)").map_err(VmError::from),
+            Err(VmError::WrongType)
         );
     }
 }

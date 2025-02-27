@@ -3,10 +3,8 @@ use compact_str::CompactString;
 
 use crate::{
     builtins::register_builtins,
-    compiler::{
-        ast::{Ast, AstError},
-        error::CompileError,
-    },
+    compiler::ast::Ast,
+    error::{VmError, VmErrorWithContext, VmResult},
     gc::{ObjectId, Objects},
     instruction::Instruction,
     module::Module,
@@ -185,155 +183,6 @@ impl Vm {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
-/// Represents errors that can occur during VM execution.
-pub enum VmErrorInner {
-    Compile(CompileError),
-    SymbolNotFound(SymbolId),
-    NotCallable(Val),
-    WrongType,
-    WrongArity {
-        name: CompactString,
-        expected: u32,
-        actual: u32,
-    },
-    Custom(CompactString),
-    Format(std::fmt::Error),
-    /// Something unexpected happened with the interpreter. This is an issue with Spore itself and
-    /// not the executed code.
-    InterpreterBug(CompactString),
-}
-
-impl std::error::Error for VmErrorInner {}
-
-impl std::fmt::Display for VmErrorInner {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            VmErrorInner::Compile(compile_error) => write!(f, "{compile_error}"),
-            VmErrorInner::SymbolNotFound(symbol_id) => {
-                write!(f, "symbol {} not found", symbol_id.as_num())
-            }
-            VmErrorInner::NotCallable(val) => write!(f, "val {val:?} is not callable"),
-            VmErrorInner::WrongType => write!(f, "wrong type encountered"),
-            VmErrorInner::WrongArity {
-                name,
-                expected,
-                actual,
-            } => write!(
-                f,
-                "wrong arity, {name} expected {expected} args, but got {actual} args."
-            ),
-            VmErrorInner::Custom(e) => write!(f, "custom error encountered, {e}"),
-            VmErrorInner::Format(error) => write!(f, "{error}"),
-            VmErrorInner::InterpreterBug(b) => write!(f, "{b}"),
-        }
-    }
-}
-
-impl VmError {
-    pub fn with_context<'a>(self, vm: &'a Vm, source: &'a str) -> VmErrorWithContext<'a> {
-        VmErrorWithContext {
-            vm,
-            err: *self.0,
-            source,
-        }
-    }
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct VmError(pub Box<VmErrorInner>);
-
-impl std::error::Error for VmError {}
-
-impl From<VmErrorInner> for VmError {
-    fn from(v: VmErrorInner) -> VmError {
-        VmError(Box::new(v))
-    }
-}
-
-impl From<AstError> for VmError {
-    fn from(v: AstError) -> VmError {
-        VmError::from(VmErrorInner::from(v))
-    }
-}
-
-impl From<CompileError> for VmError {
-    fn from(v: CompileError) -> VmError {
-        VmError::from(VmErrorInner::from(v))
-    }
-}
-
-impl std::fmt::Display for VmError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.0.fmt(f)
-    }
-}
-
-#[derive(Debug)]
-pub struct VmErrorWithContext<'a> {
-    vm: &'a Vm,
-    err: VmErrorInner,
-    source: &'a str,
-}
-
-impl std::error::Error for VmErrorWithContext<'_> {}
-
-impl std::fmt::Display for VmErrorWithContext<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match &self.err {
-            VmErrorInner::Compile(err) => {
-                write!(f, "{}", err.with_context(self.source))
-            }
-            VmErrorInner::SymbolNotFound(symbol_id) => match self.vm.symbol_name(*symbol_id) {
-                Some(sym) => write!(f, "symbol {sym} not found"),
-                None => write!(f, "{}", self.err),
-            },
-            VmErrorInner::NotCallable(val) => write!(
-                f,
-                "Value of type {tp:?} is not callable: {val}",
-                tp = val.spore_type(),
-                val = val.formatted(self.vm)
-            ),
-            VmErrorInner::WrongType => write!(f, "wrong type encountered"),
-            VmErrorInner::WrongArity {
-                name,
-                expected,
-                actual,
-            } => write!(
-                f,
-                "wrong arity, {name} expected {expected} args, but got {actual} args."
-            ),
-            VmErrorInner::Custom(e) => write!(f, "custom error encountered, {e}"),
-            VmErrorInner::Format(error) => write!(f, "format error: {error}"),
-            VmErrorInner::InterpreterBug(b) => write!(
-                f,
-                "Something unexpected happened with the interpretter: {b}"
-            ),
-        }
-    }
-}
-
-/// The result type for VM operations.
-pub type VmResult<T> = Result<T, VmError>;
-
-impl From<CompileError> for VmErrorInner {
-    fn from(value: CompileError) -> Self {
-        VmErrorInner::Compile(value)
-    }
-}
-
-impl From<std::fmt::Error> for VmErrorInner {
-    fn from(value: std::fmt::Error) -> VmErrorInner {
-        VmErrorInner::Format(value)
-    }
-}
-
-impl From<AstError> for VmErrorInner {
-    fn from(value: AstError) -> VmErrorInner {
-        VmErrorInner::from(CompileError::from(value))
-    }
-}
-
 impl Vm {
     /// Evaluates the function `f` with `args`.
     pub fn clean_eval_function(&mut self, f: Val, args: &[Val]) -> VmResult<Val> {
@@ -344,18 +193,25 @@ impl Vm {
     /// Evaluates a string of Spore code.
     ///
     /// Note: This should not be used in a Spore Native Function as it resets the evaluation.
-    pub fn clean_eval_str(&mut self, s: &str) -> VmResult<Val> {
-        self.stack.clear();
-        let asts = Ast::with_source(s)?;
-        let bytecode = ByteCodeFunction::with_module_source(self, s, asts.iter(), &Bump::new())?;
-        let bytecode_id = self.objects.register_bytecode(bytecode);
-        self.eval_function(
-            Val::BytecodeFunction {
-                id: bytecode_id,
-                captures: None,
-            },
-            &[],
-        )
+    pub fn clean_eval_str<'a>(&'a mut self, s: &'a str) -> Result<Val, VmErrorWithContext<'a>> {
+        let mut inner = || -> VmResult<Val> {
+            self.stack.clear();
+            let asts = Ast::with_source(s)?;
+            let bytecode =
+                ByteCodeFunction::with_module_source(self, s, asts.iter(), &Bump::new())?;
+            let bytecode_id = self.objects.register_bytecode(bytecode);
+            self.eval_function(
+                Val::BytecodeFunction {
+                    id: bytecode_id,
+                    captures: None,
+                },
+                &[],
+            )
+        };
+        match inner() {
+            Ok(val) => Ok(val),
+            Err(err) => Err(err.with_context(self, s)),
+        }
     }
 
     /// Evaluates the AST of Spore code.
@@ -363,18 +219,28 @@ impl Vm {
     /// This is similar to `clean_eval_str`, but is more efficient if the AST is already built up.
     ///
     /// Note: This should not be used in a Spore Native Function as it resets the evaluation.
-    pub fn clean_eval_ast(&mut self, s: &str, ast: &Ast) -> VmResult<Val> {
-        self.stack.clear();
-        let bytecode =
-            ByteCodeFunction::with_module_source(self, s, std::iter::once(ast), &Bump::new())?;
-        let bytecode_id = self.objects.register_bytecode(bytecode);
-        self.eval_function(
-            Val::BytecodeFunction {
-                id: bytecode_id,
-                captures: None,
-            },
-            &[],
-        )
+    pub fn clean_eval_ast<'a>(
+        &'a mut self,
+        s: &'a str,
+        ast: &Ast,
+    ) -> Result<Val, VmErrorWithContext<'a>> {
+        let mut inner = || -> VmResult<Val> {
+            self.stack.clear();
+            let bytecode =
+                ByteCodeFunction::with_module_source(self, s, std::iter::once(ast), &Bump::new())?;
+            let bytecode_id = self.objects.register_bytecode(bytecode);
+            self.eval_function(
+                Val::BytecodeFunction {
+                    id: bytecode_id,
+                    captures: None,
+                },
+                &[],
+            )
+        };
+        match inner() {
+            Ok(val) => Ok(val),
+            Err(err) => Err(err.with_context(self, s)),
+        }
     }
 
     /// Evaluate a function and return its result.
@@ -425,7 +291,7 @@ impl Vm {
             Instruction::Deref(symbol) => {
                 let v = match self.globals.values.get(symbol) {
                     Some(v) => *v,
-                    None => return Err(VmErrorInner::SymbolNotFound(*symbol))?,
+                    None => return Err(VmError::SymbolNotFound(*symbol))?,
                 };
                 self.stack.push(v);
             }
@@ -499,8 +365,11 @@ impl Vm {
                     .unwrap();
                 let arg_count = n as u32 - 1;
                 if function.args != arg_count {
-                    return Err(VmErrorInner::WrongArity {
-                        name: function.name.clone().unwrap_or(CompactString::new("")),
+                    return Err(VmError::WrongArity {
+                        name: function
+                            .name
+                            .clone()
+                            .unwrap_or(CompactString::const_new("")),
                         expected: function.args,
                         actual: arg_count,
                     })?;
@@ -510,7 +379,7 @@ impl Vm {
                 let actual_captures = match captures {
                     Some(captures) => {
                         let captures = self.objects.get_list(captures).ok_or_else(|| {
-                            VmErrorInner::InterpreterBug(CompactString::new(
+                            VmError::InterpreterBug(CompactString::new(
                                 "captures not registered with VM",
                             ))
                         })?;
@@ -520,7 +389,7 @@ impl Vm {
                     None => 0,
                 };
                 if actual_captures != function.captures {
-                    return Err(VmErrorInner::InterpreterBug(CompactString::new(
+                    return Err(VmError::InterpreterBug(CompactString::new(
                         "wrong number of captures for lambda",
                     )))?;
                 }
@@ -535,7 +404,7 @@ impl Vm {
                 );
                 self.previous_stack_frames.push(previous_frame);
             }
-            v => return Err(VmErrorInner::NotCallable(v))?,
+            v => return Err(VmError::NotCallable(v))?,
         }
         Ok(())
     }
@@ -549,7 +418,7 @@ impl Vm {
     /// top value.
     fn execute_jump_if(&mut self, n: usize) -> VmResult<()> {
         let v = self.stack.pop().ok_or_else(|| {
-            VmErrorInner::InterpreterBug("jump_if called with no value on stack".into())
+            VmError::InterpreterBug("jump_if called with no value on stack".into())
         })?;
         if v.is_truthy() {
             self.execute_jump(n);
@@ -664,13 +533,14 @@ mod tests {
             Val::Void
         );
         assert_eq!(
-            vm.clean_eval_str("(foo 1)").unwrap_err(),
-            VmErrorInner::WrongArity {
+            vm.clean_eval_str("(foo 1)")
+                .map_err(VmError::from)
+                .unwrap_err(),
+            VmError::WrongArity {
                 name: "foo".into(),
                 expected: 3,
                 actual: 1
             }
-            .into()
         );
     }
 
@@ -705,12 +575,7 @@ mod tests {
 (define (fib n)
   (if (< n 2) (return n))
   (+ (fib (- n 2)) (fib (- n 1))))"#;
-        assert_eq!(
-            vm.clean_eval_str(source)
-                .map_err(|err| err.clone().with_context(&vm, source))
-                .unwrap(),
-            Val::Void
-        );
+        assert_eq!(vm.clean_eval_str(source).unwrap(), Val::Void);
         assert_eq!(vm.clean_eval_str("(fib 10)").unwrap(), Val::Int(55));
     }
 
@@ -746,13 +611,11 @@ mod tests {
       (lambda (y) (+ x y)))
 
     (define add-2 (add-x-fn 2))"#;
-        assert_eq!(vm.clean_eval_str(source), Ok(Val::Void));
-        let source = "(add-2 10)";
         assert_eq!(
-            vm.clean_eval_str(source)
-                .map_err(|err| err.with_context(&vm, source).to_string())
-                .unwrap(),
-            Val::Int(12)
+            vm.clean_eval_str(source).map_err(VmError::from),
+            Ok(Val::Void)
         );
+        let source = "(add-2 10)";
+        assert_eq!(vm.clean_eval_str(source).unwrap(), Val::Int(12));
     }
 }

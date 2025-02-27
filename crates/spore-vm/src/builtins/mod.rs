@@ -10,8 +10,9 @@ pub const INTERNAL_DEFINE_FUNCTION: &str = "%define";
 use compact_str::format_compact;
 
 use crate::{
+    error::{VmError, VmResult},
     val::{native_function::NativeFunction, Val},
-    vm::{Vm, VmErrorInner, VmResult},
+    vm::Vm,
     SporeList,
 };
 
@@ -37,16 +38,13 @@ pub fn register_builtins(vm: &mut Vm) {
 
 /// Defines a symbol in the global scope.
 fn define_fn(vm: &mut Vm, sym: Val, val: Val) -> VmResult<Val> {
-    let sym = sym.as_symbol_id().ok_or_else(|| VmErrorInner::WrongType)?;
+    let sym = sym.as_symbol_id().ok_or_else(|| VmError::WrongType)?;
     vm.set_global(sym, val);
     Ok(Val::Void)
 }
 
 fn apply_fn(vm: &mut Vm, f: Val, args: Val) -> VmResult<Val> {
-    let args = args
-        .as_list(vm)
-        .ok_or_else(|| VmErrorInner::WrongType)?
-        .clone();
+    let args = args.as_list(vm).ok_or_else(|| VmError::WrongType)?.clone();
     vm.eval_function(f, &args)
 }
 
@@ -57,7 +55,7 @@ fn do_fn(_: &Vm, args: &[Val]) -> VmResult<Val> {
 
 /// Throw an error.
 fn throw_fn(_: &Vm, _: &[Val]) -> VmResult<Val> {
-    Err(VmErrorInner::Custom("exception thrown".into()))?
+    Err(VmError::Custom("exception thrown".into()))?
 }
 
 fn val_to_string_fn(vm: &mut Vm, val: Val) -> VmResult<Val> {
@@ -145,9 +143,10 @@ fn help_fn(vm: &mut Vm) -> VmResult<Val> {
 #[cfg(test)]
 mod tests {
     use crate::{
+        error::VmError,
         register_spore_type,
         val::{native_function::NativeFunction, Val},
-        vm::{Vm, VmErrorInner},
+        vm::Vm,
     };
 
     #[derive(Debug)]
@@ -157,15 +156,22 @@ mod tests {
     #[test]
     fn define_binds_values_to_name() {
         let mut vm = Vm::default();
-        assert_eq!(vm.clean_eval_str("(%define 'x 12)"), Ok(Val::Void));
-        assert_eq!(vm.clean_eval_str("x"), Ok(Val::Int(12)));
+        assert_eq!(
+            vm.clean_eval_str("(%define 'x 12)").map_err(VmError::from),
+            Ok(Val::Void)
+        );
+        assert_eq!(
+            vm.clean_eval_str("x").map_err(VmError::from),
+            Ok(Val::Int(12))
+        );
     }
 
     #[test]
     fn apply_applies_function_with_args_from_list() {
         let mut vm = Vm::default();
         assert_eq!(
-            vm.clean_eval_str("(apply + (list 1 2 3 4))"),
+            vm.clean_eval_str("(apply + (list 1 2 3 4))")
+                .map_err(VmError::from),
             Ok(Val::Int(10))
         );
         assert_eq!(
@@ -175,7 +181,8 @@ mod tests {
     (apply + (list 1 2 3 4))
     (apply - (list 4 3 2 1)))
 "#
-            ),
+            )
+            .map_err(VmError::from),
             Ok(Val::Int(8))
         );
     }
@@ -183,27 +190,48 @@ mod tests {
     #[test]
     fn do_returns_last_value_or_void_if_empty() {
         let mut vm = Vm::default();
-        assert_eq!(vm.clean_eval_str("(do)"), Ok(Val::Void));
-        assert_eq!(vm.clean_eval_str("(do 1)"), Ok(Val::Int(1)));
-        assert_eq!(vm.clean_eval_str("(do 1 2)"), Ok(Val::Int(2)));
+        assert_eq!(
+            vm.clean_eval_str("(do)").map_err(VmError::from),
+            Ok(Val::Void)
+        );
+        assert_eq!(
+            vm.clean_eval_str("(do 1)").map_err(VmError::from),
+            Ok(Val::Int(1))
+        );
+        assert_eq!(
+            vm.clean_eval_str("(do 1 2)").map_err(VmError::from),
+            Ok(Val::Int(2))
+        );
     }
 
     #[test]
     fn eq_with_equal_values_returns_true() {
         let mut vm = Vm::default();
-        assert_eq!(vm.clean_eval_str("(= false false)"), Ok(Val::Bool(true)));
-        assert_eq!(vm.clean_eval_str("(= 1 1)"), Ok(Val::Bool(true)));
-        assert_eq!(vm.clean_eval_str("(= 2.0 2.0)"), Ok(Val::Bool(true)));
         assert_eq!(
-            vm.clean_eval_str("(= \"shortstr\" \"shortstr\")"),
+            vm.clean_eval_str("(= false false)").map_err(VmError::from),
             Ok(Val::Bool(true))
         );
         assert_eq!(
-            vm.clean_eval_str("(= \"longer-str-is-eq-too\" \"longer-str-is-eq-too\")"),
+            vm.clean_eval_str("(= 1 1)").map_err(VmError::from),
             Ok(Val::Bool(true))
         );
         assert_eq!(
-            vm.clean_eval_str("(= 'a-symbol 'a-symbol)"),
+            vm.clean_eval_str("(= 2.0 2.0)").map_err(VmError::from),
+            Ok(Val::Bool(true))
+        );
+        assert_eq!(
+            vm.clean_eval_str("(= \"shortstr\" \"shortstr\")")
+                .map_err(VmError::from),
+            Ok(Val::Bool(true))
+        );
+        assert_eq!(
+            vm.clean_eval_str("(= \"longer-str-is-eq-too\" \"longer-str-is-eq-too\")")
+                .map_err(VmError::from),
+            Ok(Val::Bool(true))
+        );
+        assert_eq!(
+            vm.clean_eval_str("(= 'a-symbol 'a-symbol)")
+                .map_err(VmError::from),
             Ok(Val::Bool(true))
         );
     }
@@ -211,27 +239,46 @@ mod tests {
     #[test]
     fn eq_with_different_values_returns_false() {
         let mut vm = Vm::default();
-        assert_eq!(vm.clean_eval_str("(= false true)"), Ok(Val::Bool(false)));
-        assert_eq!(vm.clean_eval_str("(= 1 1.0)"), Ok(Val::Bool(false)));
         assert_eq!(
-            vm.clean_eval_str("(= 'symbol \"string\")"),
+            vm.clean_eval_str("(= false true)").map_err(VmError::from),
             Ok(Val::Bool(false))
         );
-        assert_eq!(vm.clean_eval_str("(= 1 2)"), Ok(Val::Bool(false)));
-        assert_eq!(vm.clean_eval_str("(= 2.0 3.0)"), Ok(Val::Bool(false)));
-        assert_eq!(vm.clean_eval_str("(= \"a\" \"b\")"), Ok(Val::Bool(false)));
         assert_eq!(
-            vm.clean_eval_str("(= \"longer-str-is-not-eq-to\" \"short\")"),
+            vm.clean_eval_str("(= 1 1.0)").map_err(VmError::from),
+            Ok(Val::Bool(false))
+        );
+        assert_eq!(
+            vm.clean_eval_str("(= 'symbol \"string\")")
+                .map_err(VmError::from),
+            Ok(Val::Bool(false))
+        );
+        assert_eq!(
+            vm.clean_eval_str("(= 1 2)").map_err(VmError::from),
+            Ok(Val::Bool(false))
+        );
+        assert_eq!(
+            vm.clean_eval_str("(= 2.0 3.0)").map_err(VmError::from),
+            Ok(Val::Bool(false))
+        );
+        assert_eq!(
+            vm.clean_eval_str("(= \"a\" \"b\")").map_err(VmError::from),
+            Ok(Val::Bool(false))
+        );
+        assert_eq!(
+            vm.clean_eval_str("(= \"longer-str-is-not-eq-to\" \"short\")")
+                .map_err(VmError::from),
             Ok(Val::Bool(false))
         );
         assert_eq!(
             vm.clean_eval_str(
                 "(= \"longer-str-is-not-eq-to\" \"this-also-long-string-that-is-not-a-short-str\")"
-            ),
+            )
+            .map_err(VmError::from),
             Ok(Val::Bool(false))
         );
         assert_eq!(
-            vm.clean_eval_str("(= 'a-symbol 'b-symbol)"),
+            vm.clean_eval_str("(= 'a-symbol 'b-symbol)")
+                .map_err(VmError::from),
             Ok(Val::Bool(false))
         );
     }
@@ -241,7 +288,8 @@ mod tests {
         let mut vm = Vm::default();
         vm.register_native_function(NativeFunction::new("new-void", |_| Ok(Val::Void)));
         assert_eq!(
-            vm.clean_eval_str("(= (new-void) (new-void))"),
+            vm.clean_eval_str("(= (new-void) (new-void))")
+                .map_err(VmError::from),
             Ok(Val::Bool(true))
         );
     }
@@ -250,12 +298,14 @@ mod tests {
     fn eq_with_same_lists_returns_true() {
         let mut vm = Vm::default();
         assert_eq!(
-            vm.clean_eval_str("(= (list 1 2 3) (list 1 2 3))"),
+            vm.clean_eval_str("(= (list 1 2 3) (list 1 2 3))")
+                .map_err(VmError::from),
             Ok(Val::Bool(true))
         );
         vm.clean_eval_str("(define eq-list (list 4 5 6))").unwrap();
         assert_eq!(
-            vm.clean_eval_str("(= eq-list eq-list)"),
+            vm.clean_eval_str("(= eq-list eq-list)")
+                .map_err(VmError::from),
             Ok(Val::Bool(true))
         );
     }
@@ -264,11 +314,13 @@ mod tests {
     fn eq_with_different_lists_returns_false() {
         let mut vm = Vm::default();
         assert_eq!(
-            vm.clean_eval_str("(= (list) (list 1))"),
+            vm.clean_eval_str("(= (list) (list 1))")
+                .map_err(VmError::from),
             Ok(Val::Bool(false))
         );
         assert_eq!(
-            vm.clean_eval_str("(= (list 1 2 3) (list 4 5 6))"),
+            vm.clean_eval_str("(= (list 1 2 3) (list 4 5 6))")
+                .map_err(VmError::from),
             Ok(Val::Bool(false))
         );
     }
@@ -277,13 +329,15 @@ mod tests {
     fn eq_with_same_structs_returns_true() {
         let mut vm = Vm::default();
         assert_eq!(
-            vm.clean_eval_str("(= (struct 'a 1 'b 2) (struct 'b 2 'a 1))"),
+            vm.clean_eval_str("(= (struct 'a 1 'b 2) (struct 'b 2 'a 1))")
+                .map_err(VmError::from),
             Ok(Val::Bool(true))
         );
         vm.clean_eval_str("(define eq-struct (struct 'a 10 'b 20))")
             .unwrap();
         assert_eq!(
-            vm.clean_eval_str("(= eq-struct eq-struct)"),
+            vm.clean_eval_str("(= eq-struct eq-struct)")
+                .map_err(VmError::from),
             Ok(Val::Bool(true))
         );
     }
@@ -292,11 +346,13 @@ mod tests {
     fn eq_with_different_structs_returns_false() {
         let mut vm = Vm::default();
         assert_eq!(
-            vm.clean_eval_str("(= (struct 'a 1 'b 2) (struct 'c 1 'd 2))"),
+            vm.clean_eval_str("(= (struct 'a 1 'b 2) (struct 'c 1 'd 2))")
+                .map_err(VmError::from),
             Ok(Val::Bool(false))
         );
         assert_eq!(
-            vm.clean_eval_str("(= (struct 'a 1) (struct 'a 2))"),
+            vm.clean_eval_str("(= (struct 'a 1) (struct 'a 2))")
+                .map_err(VmError::from),
             Ok(Val::Bool(false))
         );
     }
@@ -307,7 +363,8 @@ mod tests {
         let val = vm.make_custom(TestCustomType);
         vm.set_global_by_name("custom-val", val);
         assert_eq!(
-            vm.clean_eval_str("(= custom-val custom-val)"),
+            vm.clean_eval_str("(= custom-val custom-val)")
+                .map_err(VmError::from),
             Ok(Val::Bool(true))
         );
     }
@@ -320,7 +377,8 @@ mod tests {
         vm.set_global_by_name("custom-val1", val1);
         vm.set_global_by_name("custom-val2", val2);
         assert_eq!(
-            vm.clean_eval_str("(= custom-val1 custom-val2)"),
+            vm.clean_eval_str("(= custom-val1 custom-val2)")
+                .map_err(VmError::from),
             Ok(Val::Bool(false))
         );
     }
@@ -328,10 +386,14 @@ mod tests {
     #[test]
     fn eq_with_same_function_returns_true() {
         let mut vm = Vm::default();
-        assert_eq!(vm.clean_eval_str("(= = =)"), Ok(Val::Bool(true)));
+        assert_eq!(
+            vm.clean_eval_str("(= = =)").map_err(VmError::from),
+            Ok(Val::Bool(true))
+        );
         vm.clean_eval_str("(define (function-foo) 42)").unwrap();
         assert_eq!(
-            vm.clean_eval_str("(= function-foo function-foo)"),
+            vm.clean_eval_str("(= function-foo function-foo)")
+                .map_err(VmError::from),
             Ok(Val::Bool(true))
         );
     }
@@ -339,15 +401,20 @@ mod tests {
     #[test]
     fn eq_with_different_function_returns_true() {
         let mut vm = Vm::default();
-        assert_eq!(vm.clean_eval_str("(= = <)"), Ok(Val::Bool(false)));
+        assert_eq!(
+            vm.clean_eval_str("(= = <)").map_err(VmError::from),
+            Ok(Val::Bool(false))
+        );
         vm.clean_eval_str("(define (function-foo) 42)").unwrap();
         vm.clean_eval_str("(define (function-bar) 42)").unwrap();
         assert_eq!(
-            vm.clean_eval_str("(= function-foo function-bar)"),
+            vm.clean_eval_str("(= function-foo function-bar)")
+                .map_err(VmError::from),
             Ok(Val::Bool(false))
         );
         assert_eq!(
-            vm.clean_eval_str("(= function-foo <)"),
+            vm.clean_eval_str("(= function-foo <)")
+                .map_err(VmError::from),
             Ok(Val::Bool(false))
         );
     }
@@ -356,16 +423,16 @@ mod tests {
     fn throw_returns_an_error() {
         let mut vm = Vm::default();
         assert_eq!(
-            vm.clean_eval_str("(throw)"),
-            Err(VmErrorInner::Custom("exception thrown".into()).into())
+            vm.clean_eval_str("(throw)").map_err(VmError::from),
+            Err(VmError::Custom("exception thrown".into()))
         );
         assert_eq!(
-            vm.clean_eval_str("(throw 1)"),
-            Err(VmErrorInner::Custom("exception thrown".into()).into())
+            vm.clean_eval_str("(throw 1)").map_err(VmError::from),
+            Err(VmError::Custom("exception thrown".into()))
         );
         assert_eq!(
-            vm.clean_eval_str("(throw 1 2 3)"),
-            Err(VmErrorInner::Custom("exception thrown".into()).into())
+            vm.clean_eval_str("(throw 1 2 3)").map_err(VmError::from),
+            Err(VmError::Custom("exception thrown".into()))
         );
     }
 }

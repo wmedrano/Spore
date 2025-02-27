@@ -1,6 +1,7 @@
 use crate::{
+    error::{VmError, VmResult},
     val::{native_function::NativeFunction, Val},
-    vm::{Vm, VmErrorInner, VmResult},
+    vm::Vm,
 };
 
 pub fn register(vm: &mut Vm) {
@@ -14,14 +15,12 @@ fn box_fn(vm: &mut Vm, v: Val) -> VmResult<Val> {
 }
 
 fn unbox_fn(vm: &mut Vm, v: Val) -> VmResult<Val> {
-    let unboxed = v.unbox(vm).ok_or_else(|| VmErrorInner::WrongType)?;
+    let unboxed = v.unbox(vm).ok_or_else(|| VmError::WrongType)?;
     Ok(unboxed)
 }
 
 fn box_set_fn(vm: &mut Vm, boxed_val: Val, v: Val) -> VmResult<Val> {
-    let b = boxed_val
-        .unbox_mut(vm)
-        .ok_or_else(|| VmErrorInner::WrongType)?;
+    let b = boxed_val.unbox_mut(vm).ok_or_else(|| VmError::WrongType)?;
     let ret = *b;
     *b = v;
     Ok(ret)

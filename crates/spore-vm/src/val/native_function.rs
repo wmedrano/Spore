@@ -1,7 +1,8 @@
-use compact_str::{CompactString, ToCompactString};
+use compact_str::CompactString;
 
 use crate::{
-    vm::{Vm, VmErrorInner, VmResult},
+    error::{VmError, VmResult},
+    vm::Vm,
     SporeRc,
 };
 
@@ -39,16 +40,15 @@ impl NativeFunction {
 
     /// Creates a new native function that takes no args.
     pub fn with_args_0<F: 'static + Fn(&mut Vm) -> VmResult<Val>>(
-        name: &str,
+        name: &'static str,
         f: F,
     ) -> NativeFunction {
-        let captured_name = name.to_compact_string();
         let new_f = move |vm: &mut Vm| {
             let args = vm.args();
             match args {
                 [] => f(vm),
-                _ => Err(VmErrorInner::WrongArity {
-                    name: captured_name.clone(),
+                _ => Err(VmError::WrongArity {
+                    name: CompactString::const_new(name),
                     expected: 0,
                     actual: args.len() as u32,
                 })?,
@@ -59,16 +59,15 @@ impl NativeFunction {
 
     /// Creates a new native function that takes a single argument.
     pub fn with_args_1<F: 'static + Fn(&mut Vm, Val) -> VmResult<Val>>(
-        name: &str,
+        name: &'static str,
         f: F,
     ) -> NativeFunction {
-        let captured_name = name.to_compact_string();
         let new_f = move |vm: &mut Vm| {
             let args = vm.args();
             match args {
                 [arg] => f(vm, *arg),
-                _ => Err(VmErrorInner::WrongArity {
-                    name: captured_name.clone(),
+                _ => Err(VmError::WrongArity {
+                    name: CompactString::const_new(name),
                     expected: 1,
                     actual: args.len() as u32,
                 })?,
@@ -79,16 +78,15 @@ impl NativeFunction {
 
     /// Creates a new native function that takes two arguments.
     pub fn with_args_2<F: 'static + Fn(&mut Vm, Val, Val) -> VmResult<Val>>(
-        name: &str,
+        name: &'static str,
         f: F,
     ) -> NativeFunction {
-        let captured_name = name.to_compact_string();
         let new_f = move |vm: &mut Vm| {
             let args = vm.args();
             match args {
                 [arg1, arg2] => f(vm, *arg1, *arg2),
-                _ => Err(VmErrorInner::WrongArity {
-                    name: captured_name.clone(),
+                _ => Err(VmError::WrongArity {
+                    name: CompactString::const_new(name),
                     expected: 2,
                     actual: args.len() as u32,
                 })?,
@@ -99,16 +97,15 @@ impl NativeFunction {
 
     /// Creates a new native function that takes three arguments.
     pub fn with_args_3<F: 'static + Fn(&mut Vm, Val, Val, Val) -> VmResult<Val>>(
-        name: &str,
+        name: &'static str,
         f: F,
     ) -> NativeFunction {
-        let captured_name = name.to_compact_string();
         let new_f = move |vm: &mut Vm| {
             let args = vm.args();
             match args {
                 [arg1, arg2, arg3] => f(vm, *arg1, *arg2, *arg3),
-                _ => Err(VmErrorInner::WrongArity {
-                    name: captured_name.clone(),
+                _ => Err(VmError::WrongArity {
+                    name: CompactString::const_new(name),
                     expected: 3,
                     actual: args.len() as u32,
                 })?,

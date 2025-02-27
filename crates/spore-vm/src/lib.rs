@@ -6,6 +6,8 @@ use val::{symbol::SymbolId, Val};
 pub mod builtins;
 /// Compiler.
 pub mod compiler;
+/// Errors
+pub mod error;
 /// Items related to garbage collection and object management.
 pub mod gc;
 /// Instructions.
