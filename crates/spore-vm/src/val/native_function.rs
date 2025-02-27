@@ -1,4 +1,4 @@
-use compact_str::CompactString;
+use compact_str::{CompactString, ToCompactString};
 
 use crate::{
     vm::{Vm, VmError, VmResult},
@@ -42,11 +42,13 @@ impl NativeFunction {
         name: &str,
         f: F,
     ) -> NativeFunction {
+        let captured_name = name.to_compact_string();
         let new_f = move |vm: &mut Vm| {
             let args = vm.args();
             match args {
                 [] => f(vm),
                 _ => Err(VmError::WrongArity {
+                    name: captured_name.clone(),
                     expected: 0,
                     actual: args.len() as u32,
                 }),
@@ -60,11 +62,13 @@ impl NativeFunction {
         name: &str,
         f: F,
     ) -> NativeFunction {
+        let captured_name = name.to_compact_string();
         let new_f = move |vm: &mut Vm| {
             let args = vm.args();
             match args {
                 [arg] => f(vm, *arg),
                 _ => Err(VmError::WrongArity {
+                    name: captured_name.clone(),
                     expected: 1,
                     actual: args.len() as u32,
                 }),
@@ -78,11 +82,13 @@ impl NativeFunction {
         name: &str,
         f: F,
     ) -> NativeFunction {
+        let captured_name = name.to_compact_string();
         let new_f = move |vm: &mut Vm| {
             let args = vm.args();
             match args {
                 [arg1, arg2] => f(vm, *arg1, *arg2),
                 _ => Err(VmError::WrongArity {
+                    name: captured_name.clone(),
                     expected: 2,
                     actual: args.len() as u32,
                 }),
@@ -96,11 +102,13 @@ impl NativeFunction {
         name: &str,
         f: F,
     ) -> NativeFunction {
+        let captured_name = name.to_compact_string();
         let new_f = move |vm: &mut Vm| {
             let args = vm.args();
             match args {
                 [arg1, arg2, arg3] => f(vm, *arg1, *arg2, *arg3),
                 _ => Err(VmError::WrongArity {
+                    name: captured_name.clone(),
                     expected: 3,
                     actual: args.len() as u32,
                 }),

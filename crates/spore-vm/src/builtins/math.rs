@@ -33,6 +33,7 @@ fn plus_fn(_: &Vm, args: &[Val]) -> VmResult<Val> {
 fn minus_fn(vm: &Vm, args: &[Val]) -> VmResult<Val> {
     match args {
         [] => Err(VmError::WrongArity {
+            name: "-".into(),
             expected: 1,
             actual: 0,
         }),
@@ -128,6 +129,7 @@ mod tests {
         assert_eq!(
             vm.clean_eval_str("(-)"),
             Err(VmError::WrongArity {
+                name: "-".into(),
                 expected: 1,
                 actual: 0
             })

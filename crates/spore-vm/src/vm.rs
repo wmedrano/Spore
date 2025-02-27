@@ -193,6 +193,7 @@ pub enum VmError {
     NotCallable(Val),
     WrongType,
     WrongArity {
+        name: CompactString,
         expected: u32,
         actual: u32,
     },
@@ -214,9 +215,13 @@ impl std::fmt::Display for VmError {
             }
             VmError::NotCallable(val) => write!(f, "val {val:?} is not callable"),
             VmError::WrongType => write!(f, "wrong type encountered"),
-            VmError::WrongArity { expected, actual } => write!(
+            VmError::WrongArity {
+                name,
+                expected,
+                actual,
+            } => write!(
                 f,
-                "wrong arity, expected {expected} args, but got {actual} args."
+                "wrong arity, {name} expected {expected} args, but got {actual} args."
             ),
             VmError::Custom(e) => write!(f, "custom error encountered, {e}"),
             VmError::Format(error) => write!(f, "{error}"),
@@ -261,9 +266,13 @@ impl std::fmt::Display for VmErrorWithContext<'_> {
                 val = val.formatted(self.vm)
             ),
             VmError::WrongType => write!(f, "wrong type encountered"),
-            VmError::WrongArity { expected, actual } => write!(
+            VmError::WrongArity {
+                name,
+                expected,
+                actual,
+            } => write!(
                 f,
-                "wrong arity, expected {expected} args, but got {actual} args."
+                "wrong arity, {name} expected {expected} args, but got {actual} args."
             ),
             VmError::Custom(e) => write!(f, "custom error encountered, {e}"),
             VmError::Format(error) => write!(f, "format error: {error}"),
@@ -462,6 +471,7 @@ impl Vm {
                 let arg_count = n as u32 - 1;
                 if function.args != arg_count {
                     return Err(VmError::WrongArity {
+                        name: function.name.clone().unwrap_or(CompactString::new("")),
                         expected: function.args,
                         actual: arg_count,
                     });
@@ -627,6 +637,7 @@ mod tests {
         assert_eq!(
             vm.clean_eval_str("(foo 1)").unwrap_err(),
             VmError::WrongArity {
+                name: "foo".into(),
                 expected: 3,
                 actual: 1
             }

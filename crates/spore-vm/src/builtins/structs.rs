@@ -24,6 +24,7 @@ fn struct_fn(vm: &mut Vm) -> VmResult<Val> {
             }
             _ => {
                 return Err(VmError::WrongArity {
+                    name: "struct".into(),
                     expected: args.len() as u32 + 1,
                     actual: args.len() as u32,
                 })
