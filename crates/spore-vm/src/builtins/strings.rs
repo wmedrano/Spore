@@ -1,6 +1,6 @@
 use crate::{
     val::{native_function::NativeFunction, Val},
-    vm::{Vm, VmError, VmResult},
+    vm::{Vm, VmErrorInner, VmResult},
 };
 
 pub fn register(vm: &mut Vm) {
@@ -8,6 +8,6 @@ pub fn register(vm: &mut Vm) {
 }
 
 fn string_len_fn(vm: &mut Vm, s: Val) -> VmResult<Val> {
-    let s = s.as_str(vm).ok_or_else(|| VmError::WrongType)?;
+    let s = s.as_str(vm).ok_or_else(|| VmErrorInner::WrongType)?;
     Ok(Val::Int(s.len() as i64))
 }

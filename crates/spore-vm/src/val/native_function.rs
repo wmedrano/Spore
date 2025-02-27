@@ -1,7 +1,7 @@
 use compact_str::{CompactString, ToCompactString};
 
 use crate::{
-    vm::{Vm, VmError, VmResult},
+    vm::{Vm, VmErrorInner, VmResult},
     SporeRc,
 };
 
@@ -47,11 +47,11 @@ impl NativeFunction {
             let args = vm.args();
             match args {
                 [] => f(vm),
-                _ => Err(VmError::WrongArity {
+                _ => Err(VmErrorInner::WrongArity {
                     name: captured_name.clone(),
                     expected: 0,
                     actual: args.len() as u32,
-                }),
+                })?,
             }
         };
         NativeFunction::new(name, new_f)
@@ -67,11 +67,11 @@ impl NativeFunction {
             let args = vm.args();
             match args {
                 [arg] => f(vm, *arg),
-                _ => Err(VmError::WrongArity {
+                _ => Err(VmErrorInner::WrongArity {
                     name: captured_name.clone(),
                     expected: 1,
                     actual: args.len() as u32,
-                }),
+                })?,
             }
         };
         NativeFunction::new(name, new_f)
@@ -87,11 +87,11 @@ impl NativeFunction {
             let args = vm.args();
             match args {
                 [arg1, arg2] => f(vm, *arg1, *arg2),
-                _ => Err(VmError::WrongArity {
+                _ => Err(VmErrorInner::WrongArity {
                     name: captured_name.clone(),
                     expected: 2,
                     actual: args.len() as u32,
-                }),
+                })?,
             }
         };
         NativeFunction::new(name, new_f)
@@ -107,11 +107,11 @@ impl NativeFunction {
             let args = vm.args();
             match args {
                 [arg1, arg2, arg3] => f(vm, *arg1, *arg2, *arg3),
-                _ => Err(VmError::WrongArity {
+                _ => Err(VmErrorInner::WrongArity {
                     name: captured_name.clone(),
                     expected: 3,
                     actual: args.len() as u32,
-                }),
+                })?,
             }
         };
         NativeFunction::new(name, new_f)

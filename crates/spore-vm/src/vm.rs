@@ -187,7 +187,7 @@ impl Vm {
 
 #[derive(Clone, Debug, PartialEq)]
 /// Represents errors that can occur during VM execution.
-pub enum VmError {
+pub enum VmErrorInner {
     Compile(CompileError),
     SymbolNotFound(SymbolId),
     NotCallable(Val),
@@ -204,18 +204,18 @@ pub enum VmError {
     InterpreterBug(CompactString),
 }
 
-impl std::error::Error for VmError {}
+impl std::error::Error for VmErrorInner {}
 
-impl std::fmt::Display for VmError {
+impl std::fmt::Display for VmErrorInner {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            VmError::Compile(compile_error) => write!(f, "{compile_error}"),
-            VmError::SymbolNotFound(symbol_id) => {
+            VmErrorInner::Compile(compile_error) => write!(f, "{compile_error}"),
+            VmErrorInner::SymbolNotFound(symbol_id) => {
                 write!(f, "symbol {} not found", symbol_id.as_num())
             }
-            VmError::NotCallable(val) => write!(f, "val {val:?} is not callable"),
-            VmError::WrongType => write!(f, "wrong type encountered"),
-            VmError::WrongArity {
+            VmErrorInner::NotCallable(val) => write!(f, "val {val:?} is not callable"),
+            VmErrorInner::WrongType => write!(f, "wrong type encountered"),
+            VmErrorInner::WrongArity {
                 name,
                 expected,
                 actual,
@@ -223,9 +223,9 @@ impl std::fmt::Display for VmError {
                 f,
                 "wrong arity, {name} expected {expected} args, but got {actual} args."
             ),
-            VmError::Custom(e) => write!(f, "custom error encountered, {e}"),
-            VmError::Format(error) => write!(f, "{error}"),
-            VmError::InterpreterBug(b) => write!(f, "{b}"),
+            VmErrorInner::Custom(e) => write!(f, "custom error encountered, {e}"),
+            VmErrorInner::Format(error) => write!(f, "{error}"),
+            VmErrorInner::InterpreterBug(b) => write!(f, "{b}"),
         }
     }
 }
@@ -234,16 +234,45 @@ impl VmError {
     pub fn with_context<'a>(self, vm: &'a Vm, source: &'a str) -> VmErrorWithContext<'a> {
         VmErrorWithContext {
             vm,
-            err: self,
+            err: *self.0,
             source,
         }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct VmError(pub Box<VmErrorInner>);
+
+impl std::error::Error for VmError {}
+
+impl From<VmErrorInner> for VmError {
+    fn from(v: VmErrorInner) -> VmError {
+        VmError(Box::new(v))
+    }
+}
+
+impl From<AstError> for VmError {
+    fn from(v: AstError) -> VmError {
+        VmError::from(VmErrorInner::from(v))
+    }
+}
+
+impl From<CompileError> for VmError {
+    fn from(v: CompileError) -> VmError {
+        VmError::from(VmErrorInner::from(v))
+    }
+}
+
+impl std::fmt::Display for VmError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
     }
 }
 
 #[derive(Debug)]
 pub struct VmErrorWithContext<'a> {
     vm: &'a Vm,
-    err: VmError,
+    err: VmErrorInner,
     source: &'a str,
 }
 
@@ -252,21 +281,21 @@ impl std::error::Error for VmErrorWithContext<'_> {}
 impl std::fmt::Display for VmErrorWithContext<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.err {
-            VmError::Compile(err) => {
+            VmErrorInner::Compile(err) => {
                 write!(f, "{}", err.with_context(self.source))
             }
-            VmError::SymbolNotFound(symbol_id) => match self.vm.symbol_name(*symbol_id) {
+            VmErrorInner::SymbolNotFound(symbol_id) => match self.vm.symbol_name(*symbol_id) {
                 Some(sym) => write!(f, "symbol {sym} not found"),
                 None => write!(f, "{}", self.err),
             },
-            VmError::NotCallable(val) => write!(
+            VmErrorInner::NotCallable(val) => write!(
                 f,
                 "Value of type {tp:?} is not callable: {val}",
                 tp = val.spore_type(),
                 val = val.formatted(self.vm)
             ),
-            VmError::WrongType => write!(f, "wrong type encountered"),
-            VmError::WrongArity {
+            VmErrorInner::WrongType => write!(f, "wrong type encountered"),
+            VmErrorInner::WrongArity {
                 name,
                 expected,
                 actual,
@@ -274,9 +303,9 @@ impl std::fmt::Display for VmErrorWithContext<'_> {
                 f,
                 "wrong arity, {name} expected {expected} args, but got {actual} args."
             ),
-            VmError::Custom(e) => write!(f, "custom error encountered, {e}"),
-            VmError::Format(error) => write!(f, "format error: {error}"),
-            VmError::InterpreterBug(b) => write!(
+            VmErrorInner::Custom(e) => write!(f, "custom error encountered, {e}"),
+            VmErrorInner::Format(error) => write!(f, "format error: {error}"),
+            VmErrorInner::InterpreterBug(b) => write!(
                 f,
                 "Something unexpected happened with the interpretter: {b}"
             ),
@@ -287,21 +316,21 @@ impl std::fmt::Display for VmErrorWithContext<'_> {
 /// The result type for VM operations.
 pub type VmResult<T> = Result<T, VmError>;
 
-impl From<CompileError> for VmError {
+impl From<CompileError> for VmErrorInner {
     fn from(value: CompileError) -> Self {
-        VmError::Compile(value)
+        VmErrorInner::Compile(value)
     }
 }
 
-impl From<std::fmt::Error> for VmError {
-    fn from(value: std::fmt::Error) -> VmError {
-        VmError::Format(value)
+impl From<std::fmt::Error> for VmErrorInner {
+    fn from(value: std::fmt::Error) -> VmErrorInner {
+        VmErrorInner::Format(value)
     }
 }
 
-impl From<AstError> for VmError {
-    fn from(value: AstError) -> VmError {
-        VmError::from(CompileError::from(value))
+impl From<AstError> for VmErrorInner {
+    fn from(value: AstError) -> VmErrorInner {
+        VmErrorInner::from(CompileError::from(value))
     }
 }
 
@@ -396,7 +425,7 @@ impl Vm {
             Instruction::Deref(symbol) => {
                 let v = match self.globals.values.get(symbol) {
                     Some(v) => *v,
-                    None => return Err(VmError::SymbolNotFound(*symbol)),
+                    None => return Err(VmErrorInner::SymbolNotFound(*symbol))?,
                 };
                 self.stack.push(v);
             }
@@ -470,18 +499,18 @@ impl Vm {
                     .unwrap();
                 let arg_count = n as u32 - 1;
                 if function.args != arg_count {
-                    return Err(VmError::WrongArity {
+                    return Err(VmErrorInner::WrongArity {
                         name: function.name.clone().unwrap_or(CompactString::new("")),
                         expected: function.args,
                         actual: arg_count,
-                    });
+                    })?;
                 }
                 self.stack
                     .extend(std::iter::repeat_n(Val::Void, function.locals as usize));
                 let actual_captures = match captures {
                     Some(captures) => {
                         let captures = self.objects.get_list(captures).ok_or_else(|| {
-                            VmError::InterpreterBug(CompactString::new(
+                            VmErrorInner::InterpreterBug(CompactString::new(
                                 "captures not registered with VM",
                             ))
                         })?;
@@ -491,9 +520,9 @@ impl Vm {
                     None => 0,
                 };
                 if actual_captures != function.captures {
-                    return Err(VmError::InterpreterBug(CompactString::new(
+                    return Err(VmErrorInner::InterpreterBug(CompactString::new(
                         "wrong number of captures for lambda",
-                    )));
+                    )))?;
                 }
                 let previous_frame = std::mem::replace(
                     &mut self.stack_frame,
@@ -506,7 +535,7 @@ impl Vm {
                 );
                 self.previous_stack_frames.push(previous_frame);
             }
-            v => return Err(VmError::NotCallable(v)),
+            v => return Err(VmErrorInner::NotCallable(v))?,
         }
         Ok(())
     }
@@ -520,7 +549,7 @@ impl Vm {
     /// top value.
     fn execute_jump_if(&mut self, n: usize) -> VmResult<()> {
         let v = self.stack.pop().ok_or_else(|| {
-            VmError::InterpreterBug("jump_if called with no value on stack".into())
+            VmErrorInner::InterpreterBug("jump_if called with no value on stack".into())
         })?;
         if v.is_truthy() {
             self.execute_jump(n);
@@ -636,11 +665,12 @@ mod tests {
         );
         assert_eq!(
             vm.clean_eval_str("(foo 1)").unwrap_err(),
-            VmError::WrongArity {
+            VmErrorInner::WrongArity {
                 name: "foo".into(),
                 expected: 3,
                 actual: 1
             }
+            .into()
         );
     }
 

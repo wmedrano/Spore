@@ -11,7 +11,7 @@ use compact_str::format_compact;
 
 use crate::{
     val::{native_function::NativeFunction, Val},
-    vm::{Vm, VmError, VmResult},
+    vm::{Vm, VmErrorInner, VmResult},
     SporeList,
 };
 
@@ -37,13 +37,16 @@ pub fn register_builtins(vm: &mut Vm) {
 
 /// Defines a symbol in the global scope.
 fn define_fn(vm: &mut Vm, sym: Val, val: Val) -> VmResult<Val> {
-    let sym = sym.as_symbol_id().ok_or_else(|| VmError::WrongType)?;
+    let sym = sym.as_symbol_id().ok_or_else(|| VmErrorInner::WrongType)?;
     vm.set_global(sym, val);
     Ok(Val::Void)
 }
 
 fn apply_fn(vm: &mut Vm, f: Val, args: Val) -> VmResult<Val> {
-    let args = args.as_list(vm).ok_or_else(|| VmError::WrongType)?.clone();
+    let args = args
+        .as_list(vm)
+        .ok_or_else(|| VmErrorInner::WrongType)?
+        .clone();
     vm.eval_function(f, &args)
 }
 
@@ -54,7 +57,7 @@ fn do_fn(_: &Vm, args: &[Val]) -> VmResult<Val> {
 
 /// Throw an error.
 fn throw_fn(_: &Vm, _: &[Val]) -> VmResult<Val> {
-    Err(VmError::Custom("exception thrown".into()))
+    Err(VmErrorInner::Custom("exception thrown".into()))?
 }
 
 fn val_to_string_fn(vm: &mut Vm, val: Val) -> VmResult<Val> {
@@ -144,7 +147,7 @@ mod tests {
     use crate::{
         register_spore_type,
         val::{native_function::NativeFunction, Val},
-        vm::{Vm, VmError},
+        vm::{Vm, VmErrorInner},
     };
 
     #[derive(Debug)]
@@ -354,15 +357,15 @@ mod tests {
         let mut vm = Vm::default();
         assert_eq!(
             vm.clean_eval_str("(throw)"),
-            Err(VmError::Custom("exception thrown".into()))
+            Err(VmErrorInner::Custom("exception thrown".into()).into())
         );
         assert_eq!(
             vm.clean_eval_str("(throw 1)"),
-            Err(VmError::Custom("exception thrown".into()))
+            Err(VmErrorInner::Custom("exception thrown".into()).into())
         );
         assert_eq!(
             vm.clean_eval_str("(throw 1 2 3)"),
-            Err(VmError::Custom("exception thrown".into()))
+            Err(VmErrorInner::Custom("exception thrown".into()).into())
         );
     }
 }

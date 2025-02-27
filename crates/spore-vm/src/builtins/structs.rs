@@ -1,6 +1,6 @@
 use crate::{
     val::{native_function::NativeFunction, Val},
-    vm::{Vm, VmError, VmResult},
+    vm::{Vm, VmErrorInner, VmResult},
     SporeStruct,
 };
 
@@ -18,16 +18,16 @@ fn struct_fn(vm: &mut Vm) -> VmResult<Val> {
             [key, value] => {
                 let key = match key {
                     Val::Symbol(symbol_id) => symbol_id,
-                    _ => return Err(VmError::WrongType),
+                    _ => return Err(VmErrorInner::WrongType)?,
                 };
                 strct.insert(*key, *value);
             }
             _ => {
-                return Err(VmError::WrongArity {
+                return Err(VmErrorInner::WrongArity {
                     name: "struct".into(),
                     expected: args.len() as u32 + 1,
                     actual: args.len() as u32,
-                })
+                })?
             }
         }
     }
@@ -37,18 +37,19 @@ fn struct_fn(vm: &mut Vm) -> VmResult<Val> {
 fn struct_get_fn(vm: &mut Vm, strct: Val, sym: Val) -> VmResult<Val> {
     let sym = match sym {
         Val::Symbol(x) => x,
-        _ => return Err(VmError::WrongType),
+        _ => return Err(VmErrorInner::WrongType)?,
     };
-    let strct = strct.as_struct(vm).ok_or_else(|| VmError::WrongType)?;
-    strct
+    let strct = strct.as_struct(vm).ok_or_else(|| VmErrorInner::WrongType)?;
+    let item = strct
         .get(&sym)
         .copied()
-        .ok_or_else(|| VmError::Custom("key not found".into()))
+        .ok_or_else(|| VmErrorInner::Custom("key not found".into()))?;
+    Ok(item)
 }
 
 fn struct_set_fn(vm: &mut Vm, strct: Val, sym: Val, val: Val) -> VmResult<Val> {
-    let sym = sym.as_symbol_id().ok_or(VmError::WrongType)?;
-    let strct = strct.as_struct_mut(vm).ok_or(VmError::WrongType)?;
+    let sym = sym.as_symbol_id().ok_or(VmErrorInner::WrongType)?;
+    let strct = strct.as_struct_mut(vm).ok_or(VmErrorInner::WrongType)?;
     strct.insert(sym, val);
     Ok(Val::Void)
 }
@@ -117,7 +118,7 @@ mod tests {
             .unwrap();
         assert_eq!(
             vm.clean_eval_str("(struct-get s 'test3)"),
-            Err(VmError::Custom("key not found".into()))
+            Err(VmErrorInner::Custom("key not found".into()).into())
         );
     }
 
@@ -128,11 +129,11 @@ mod tests {
             .unwrap();
         assert_eq!(
             vm.clean_eval_str("(struct-set! 1 'test3 3)"),
-            Err(VmError::WrongType)
+            Err(VmErrorInner::WrongType.into())
         );
         assert_eq!(
             vm.clean_eval_str("(struct-set! s 4 3)"),
-            Err(VmError::WrongType)
+            Err(VmErrorInner::WrongType.into())
         );
     }
 }

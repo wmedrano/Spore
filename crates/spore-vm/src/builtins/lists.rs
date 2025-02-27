@@ -1,6 +1,6 @@
 use crate::{
     val::{native_function::NativeFunction, Val},
-    vm::{Vm, VmError, VmResult},
+    vm::{Vm, VmErrorInner, VmResult},
 };
 
 pub fn register(vm: &mut Vm) {
@@ -20,8 +20,8 @@ fn list_fn(vm: &mut Vm) -> VmResult<Val> {
 }
 
 fn list_concat_fn(vm: &mut Vm, a: Val, b: Val) -> VmResult<Val> {
-    let a = a.as_list(vm).ok_or_else(|| VmError::WrongType)?;
-    let b = b.as_list(vm).ok_or_else(|| VmError::WrongType)?;
+    let a = a.as_list(vm).ok_or_else(|| VmErrorInner::WrongType)?;
+    let b = b.as_list(vm).ok_or_else(|| VmErrorInner::WrongType)?;
     let c = Vec::from_iter(a.iter().chain(b.iter()).copied());
     Ok(vm.make_list(c))
 }
@@ -64,36 +64,38 @@ fn filter_fn(vm: &mut Vm, pred: Val, lst: Val) -> VmResult<Val> {
 }
 
 fn list_len_fn(vm: &mut Vm, lst: Val) -> VmResult<Val> {
-    let lst = lst.as_list(vm).ok_or_else(|| VmError::WrongType)?;
+    let lst = lst.as_list(vm).ok_or_else(|| VmErrorInner::WrongType)?;
     Ok(Val::Int(lst.len() as i64))
 }
 
 fn list_empty_fn(vm: &mut Vm, lst: Val) -> VmResult<Val> {
-    let lst = lst.as_list(vm).ok_or_else(|| VmError::WrongType)?;
+    let lst = lst.as_list(vm).ok_or_else(|| VmErrorInner::WrongType)?;
     Ok(Val::Bool(lst.is_empty()))
 }
 fn nth_fn(vm: &mut Vm, lst: Val, idx: Val) -> VmResult<Val> {
     let idx = match idx {
         Val::Int(x) => {
             if x < 0 {
-                return Err(VmError::Custom("negative idx provided".into()));
+                return Err(VmErrorInner::Custom("negative idx provided".into()))?;
             } else {
                 x as usize
             }
         }
-        _ => return Err(VmError::WrongType),
+        _ => return Err(VmErrorInner::WrongType)?,
     };
-    let lst = lst.as_list(vm).ok_or_else(|| VmError::WrongType)?;
-    lst.get(idx)
+    let lst = lst.as_list(vm).ok_or_else(|| VmErrorInner::WrongType)?;
+    let item = lst
+        .get(idx)
         .copied()
-        .ok_or_else(|| VmError::Custom("index out of range".into()))
+        .ok_or_else(|| VmErrorInner::Custom("index out of range".into()))?;
+    Ok(item)
 }
 
 #[cfg(test)]
 mod tests {
     use crate::{
         val::Val,
-        vm::{Vm, VmError},
+        vm::{Vm, VmErrorInner},
     };
 
     #[test]
@@ -190,7 +192,7 @@ mod tests {
     fn list_len_errors_if_not_a_list() {
         let mut vm = Vm::default();
         let got = vm.clean_eval_str("(list-len 1)");
-        assert_eq!(got, Err(VmError::WrongType));
+        assert_eq!(got, Err(VmErrorInner::WrongType.into()));
     }
 
     #[test]
@@ -206,21 +208,27 @@ mod tests {
     fn nth_returns_error_if_index_out_of_bounds() {
         let mut vm = Vm::default();
         let got = vm.clean_eval_str("(define lst (list 1 2 3)) (nth lst 3)");
-        assert_eq!(got, Err(VmError::Custom("index out of range".into())));
+        assert_eq!(
+            got,
+            Err(VmErrorInner::Custom("index out of range".into()).into())
+        );
     }
 
     #[test]
     fn nth_returns_error_if_index_is_negative() {
         let mut vm = Vm::default();
         let got = vm.clean_eval_str("(define lst (list 1 2 3)) (nth lst -1)");
-        assert_eq!(got, Err(VmError::Custom("negative idx provided".into())));
+        assert_eq!(
+            got,
+            Err(VmErrorInner::Custom("negative idx provided".into()).into())
+        );
     }
 
     #[test]
     fn nth_returns_error_if_first_arg_is_not_list() {
         let mut vm = Vm::default();
         let got = vm.clean_eval_str("(nth 1 1)");
-        assert_eq!(got, Err(VmError::WrongType));
+        assert_eq!(got, Err(VmErrorInner::WrongType.into()));
     }
 
     #[test]
@@ -228,6 +236,6 @@ mod tests {
         let mut vm = Vm::default();
         vm.clean_eval_str("(define lst (list 1 2 3))").unwrap();
         let got = vm.clean_eval_str("(nth lst true)");
-        assert_eq!(got, Err(VmError::WrongType));
+        assert_eq!(got, Err(VmErrorInner::WrongType.into()));
     }
 }
