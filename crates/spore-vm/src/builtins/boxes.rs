@@ -1,6 +1,6 @@
 use crate::{
     error::{VmError, VmResult},
-    val::{native_function::NativeFunction, Val},
+    val::{native_function::NativeFunction, DataType, Val},
     vm::Vm,
 };
 
@@ -15,12 +15,18 @@ fn box_fn(vm: &mut Vm, v: Val) -> VmResult<Val> {
 }
 
 fn unbox_fn(vm: &mut Vm, v: Val) -> VmResult<Val> {
-    let unboxed = v.unbox(vm).ok_or_else(|| VmError::WrongType)?;
+    let unboxed = v.unbox(vm).ok_or_else(|| VmError::WrongType {
+        expected: DataType::Box,
+        actual: v.spore_type(),
+    })?;
     Ok(unboxed)
 }
 
 fn box_set_fn(vm: &mut Vm, boxed_val: Val, v: Val) -> VmResult<Val> {
-    let b = boxed_val.unbox_mut(vm).ok_or_else(|| VmError::WrongType)?;
+    let b = boxed_val.unbox_mut(vm).ok_or_else(|| VmError::WrongType {
+        expected: DataType::Box,
+        actual: v.spore_type(),
+    })?;
     let ret = *b;
     *b = v;
     Ok(ret)

@@ -1,6 +1,6 @@
 use crate::{
     error::{VmError, VmResult},
-    val::{native_function::NativeFunction, Val},
+    val::{native_function::NativeFunction, DataType, Val},
     vm::Vm,
 };
 
@@ -21,8 +21,14 @@ fn list_fn(vm: &mut Vm) -> VmResult<Val> {
 }
 
 fn list_concat_fn(vm: &mut Vm, a: Val, b: Val) -> VmResult<Val> {
-    let a = a.as_list(vm).ok_or_else(|| VmError::WrongType)?;
-    let b = b.as_list(vm).ok_or_else(|| VmError::WrongType)?;
+    let a = a.as_list(vm).ok_or_else(|| VmError::WrongType {
+        expected: DataType::List,
+        actual: a.spore_type(),
+    })?;
+    let b = b.as_list(vm).ok_or_else(|| VmError::WrongType {
+        expected: DataType::List,
+        actual: b.spore_type(),
+    })?;
     let c = Vec::from_iter(a.iter().chain(b.iter()).copied());
     Ok(vm.make_list(c))
 }
@@ -65,12 +71,18 @@ fn filter_fn(vm: &mut Vm, pred: Val, lst: Val) -> VmResult<Val> {
 }
 
 fn list_len_fn(vm: &mut Vm, lst: Val) -> VmResult<Val> {
-    let lst = lst.as_list(vm).ok_or_else(|| VmError::WrongType)?;
+    let lst = lst.as_list(vm).ok_or_else(|| VmError::WrongType {
+        expected: DataType::List,
+        actual: lst.spore_type(),
+    })?;
     Ok(Val::Int(lst.len() as i64))
 }
 
 fn list_empty_fn(vm: &mut Vm, lst: Val) -> VmResult<Val> {
-    let lst = lst.as_list(vm).ok_or_else(|| VmError::WrongType)?;
+    let lst = lst.as_list(vm).ok_or_else(|| VmError::WrongType {
+        expected: DataType::List,
+        actual: lst.spore_type(),
+    })?;
     Ok(Val::Bool(lst.is_empty()))
 }
 fn nth_fn(vm: &mut Vm, lst: Val, idx: Val) -> VmResult<Val> {
@@ -82,9 +94,17 @@ fn nth_fn(vm: &mut Vm, lst: Val, idx: Val) -> VmResult<Val> {
                 x as usize
             }
         }
-        _ => return Err(VmError::WrongType)?,
+        _ => {
+            return Err(VmError::WrongType {
+                expected: DataType::Int,
+                actual: idx.spore_type(),
+            })?
+        }
     };
-    let lst = lst.as_list(vm).ok_or_else(|| VmError::WrongType)?;
+    let lst = lst.as_list(vm).ok_or_else(|| VmError::WrongType {
+        expected: DataType::List,
+        actual: lst.spore_type(),
+    })?;
     let item = lst
         .get(idx)
         .copied()
@@ -94,7 +114,11 @@ fn nth_fn(vm: &mut Vm, lst: Val, idx: Val) -> VmResult<Val> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{error::VmError, val::Val, vm::Vm};
+    use crate::{
+        error::VmError,
+        val::{DataType, Val},
+        vm::Vm,
+    };
 
     #[test]
     fn list_with_no_args_returns_empty_list() {
@@ -190,7 +214,13 @@ mod tests {
     fn list_len_errors_if_not_a_list() {
         let mut vm = Vm::default();
         let got = vm.clean_eval_str("(list-len 1)").map_err(VmError::from);
-        assert_eq!(got, Err(VmError::WrongType));
+        assert_eq!(
+            got,
+            Err(VmError::WrongType {
+                expected: DataType::List,
+                actual: DataType::Int
+            })
+        );
     }
 
     #[test]
@@ -224,7 +254,13 @@ mod tests {
     fn nth_returns_error_if_first_arg_is_not_list() {
         let mut vm = Vm::default();
         let got = vm.clean_eval_str("(nth 1 1)").map_err(VmError::from);
-        assert_eq!(got, Err(VmError::WrongType));
+        assert_eq!(
+            got,
+            Err(VmError::WrongType {
+                expected: DataType::List,
+                actual: DataType::Int
+            })
+        );
     }
 
     #[test]
@@ -232,6 +268,12 @@ mod tests {
         let mut vm = Vm::default();
         vm.clean_eval_str("(define lst (list 1 2 3))").unwrap();
         let got = vm.clean_eval_str("(nth lst true)").map_err(VmError::from);
-        assert_eq!(got, Err(VmError::WrongType));
+        assert_eq!(
+            got,
+            Err(VmError::WrongType {
+                expected: DataType::Int,
+                actual: DataType::Bool
+            })
+        );
     }
 }

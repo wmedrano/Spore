@@ -2,7 +2,7 @@ use compact_str::CompactString;
 
 use crate::{
     compiler::{ast::AstError, error::CompileError},
-    val::{symbol::SymbolId, Val},
+    val::{symbol::SymbolId, DataType, Val},
     vm::Vm,
 };
 
@@ -15,7 +15,10 @@ pub enum VmError {
     Compile(CompileError),
     SymbolNotFound(SymbolId),
     NotCallable(Val),
-    WrongType,
+    WrongType {
+        expected: DataType,
+        actual: DataType,
+    },
     WrongArity {
         name: CompactString,
         expected: u32,
@@ -48,7 +51,10 @@ impl std::fmt::Display for VmError {
                 write!(f, "symbol {} not found", symbol_id.as_num())
             }
             VmError::NotCallable(val) => write!(f, "val {val:?} is not callable"),
-            VmError::WrongType => write!(f, "wrong type encountered"),
+            VmError::WrongType { expected, actual } => write!(
+                f,
+                "wrong type encountered, expected {expected:?} but got {actual:?}"
+            ),
             VmError::WrongArity {
                 name,
                 expected,
@@ -88,11 +94,16 @@ impl<'a> From<VmErrorWithContext<'a>> for VmError {
     }
 }
 
-#[derive(Debug)]
 pub struct VmErrorWithContext<'a> {
     vm: &'a Vm,
     err: VmError,
     source: &'a str,
+}
+
+impl std::fmt::Debug for VmErrorWithContext<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(self, f)
+    }
 }
 
 impl std::error::Error for VmErrorWithContext<'_> {}
@@ -113,7 +124,10 @@ impl std::fmt::Display for VmErrorWithContext<'_> {
                 tp = val.spore_type(),
                 val = val.formatted(self.vm)
             ),
-            VmError::WrongType => write!(f, "wrong type encountered"),
+            VmError::WrongType { expected, actual } => write!(
+                f,
+                "wrong type encountered, expected {expected:?} but got {actual:?}"
+            ),
             VmError::WrongArity {
                 name,
                 expected,

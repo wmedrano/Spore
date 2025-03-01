@@ -1,6 +1,6 @@
 use crate::{
     error::{VmError, VmResult},
-    val::{native_function::NativeFunction, Val},
+    val::{native_function::NativeFunction, DataType, Val},
     vm::Vm,
 };
 
@@ -19,7 +19,12 @@ fn plus_fn(_: &Vm, args: &[Val]) -> VmResult<Val> {
         match arg {
             Val::Int(x) => int_sum += *x,
             Val::Float(x) => float_sum += *x,
-            _ => return Err(VmError::WrongType)?,
+            _ => {
+                return Err(VmError::WrongType {
+                    expected: DataType::Float,
+                    actual: arg.spore_type(),
+                })?
+            }
         }
     }
     let res = if float_sum == 0.0 {
@@ -68,7 +73,14 @@ fn less_fn(_: &Vm, args: &[Val]) -> VmResult<Val> {
         (Val::Float(a), Val::Float(b)) => Ok(a < b),
         (Val::Int(a), Val::Float(b)) => Ok((a as f64) < b),
         (Val::Float(a), Val::Int(b)) => Ok(a < (b as f64)),
-        _ => Err(VmError::WrongType)?,
+        (Val::Int(_), _) | (Val::Float(_), _) => Err(VmError::WrongType {
+            expected: DataType::Float,
+            actual: b.spore_type(),
+        })?,
+        _ => Err(VmError::WrongType {
+            expected: DataType::Float,
+            actual: a.spore_type(),
+        })?,
     })
 }
 
@@ -79,13 +91,24 @@ fn greater_fn(_: &Vm, args: &[Val]) -> VmResult<Val> {
         (Val::Float(a), Val::Float(b)) => Ok(a > b),
         (Val::Int(a), Val::Float(b)) => Ok((a as f64) > b),
         (Val::Float(a), Val::Int(b)) => Ok(a > (b as f64)),
-        _ => Err(VmError::WrongType)?,
+        (Val::Int(_), _) | (Val::Float(_), _) => Err(VmError::WrongType {
+            expected: DataType::Float,
+            actual: b.spore_type(),
+        })?,
+        _ => Err(VmError::WrongType {
+            expected: DataType::Float,
+            actual: a.spore_type(),
+        })?,
     })
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::{error::VmError, val::Val, vm::Vm};
+    use crate::{
+        error::VmError,
+        val::{DataType, Val},
+        vm::Vm,
+    };
 
     #[test]
     fn empty_plus_is_0() {
@@ -99,7 +122,10 @@ mod tests {
         assert_eq!(
             vm.clean_eval_str("(+ -1 2 -3 4 false)")
                 .map_err(VmError::from),
-            Err(VmError::WrongType)
+            Err(VmError::WrongType {
+                expected: DataType::Float,
+                actual: DataType::Bool
+            })
         );
     }
 
@@ -198,7 +224,10 @@ mod tests {
         let mut vm = Vm::default();
         assert_eq!(
             vm.clean_eval_str("(< false true)").map_err(VmError::from),
-            Err(VmError::WrongType)
+            Err(VmError::WrongType {
+                expected: DataType::Float,
+                actual: DataType::Bool,
+            })
         );
     }
 }

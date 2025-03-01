@@ -1,6 +1,6 @@
 use crate::{
     error::{VmError, VmResult},
-    val::{native_function::NativeFunction, Val},
+    val::{native_function::NativeFunction, DataType, Val},
     vm::Vm,
 };
 
@@ -9,6 +9,9 @@ pub fn register(vm: &mut Vm) {
 }
 
 fn string_len_fn(vm: &mut Vm, s: Val) -> VmResult<Val> {
-    let s = s.as_str(vm).ok_or_else(|| VmError::WrongType)?;
+    let s = s.as_str(vm).ok_or_else(|| VmError::WrongType {
+        expected: DataType::String,
+        actual: s.spore_type(),
+    })?;
     Ok(Val::Int(s.len() as i64))
 }

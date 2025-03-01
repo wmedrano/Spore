@@ -8,9 +8,7 @@
 
 ;; Handle `event` globally.
 (define (handle-event! event)
-  (define window (active-window))
-  (define modal? (struct-get window :modal?))
-    (when (= event "<c-q>")
-      (exit!)
-      (return))
+  (when (= event "<c-q>")
+    (exit!)
+    (return))
   (window-handle-event! (active-window) event))

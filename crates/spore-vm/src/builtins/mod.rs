@@ -11,7 +11,7 @@ use compact_str::format_compact;
 
 use crate::{
     error::{VmError, VmResult},
-    val::{native_function::NativeFunction, Val},
+    val::{native_function::NativeFunction, DataType, Val},
     vm::Vm,
     SporeList,
 };
@@ -38,13 +38,22 @@ pub fn register_builtins(vm: &mut Vm) {
 
 /// Defines a symbol in the global scope.
 fn define_fn(vm: &mut Vm, sym: Val, val: Val) -> VmResult<Val> {
-    let sym = sym.as_symbol_id().ok_or_else(|| VmError::WrongType)?;
+    let sym = sym.as_symbol_id().ok_or_else(|| VmError::WrongType {
+        expected: DataType::Symbol,
+        actual: sym.spore_type(),
+    })?;
     vm.set_global(sym, val);
     Ok(Val::Void)
 }
 
 fn apply_fn(vm: &mut Vm, f: Val, args: Val) -> VmResult<Val> {
-    let args = args.as_list(vm).ok_or_else(|| VmError::WrongType)?.clone();
+    let args = args
+        .as_list(vm)
+        .ok_or_else(|| VmError::WrongType {
+            expected: DataType::List,
+            actual: args.spore_type(),
+        })?
+        .clone();
     vm.eval_function(f, &args)
 }
 

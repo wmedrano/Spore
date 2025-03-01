@@ -1,6 +1,6 @@
 use crate::{
     error::{VmError, VmResult},
-    val::{native_function::NativeFunction, Val},
+    val::{native_function::NativeFunction, DataType, Val},
     vm::Vm,
     SporeStruct,
 };
@@ -19,7 +19,12 @@ fn struct_fn(vm: &mut Vm) -> VmResult<Val> {
             [key, value] => {
                 let key = match key {
                     Val::Symbol(symbol_id) => symbol_id,
-                    _ => return Err(VmError::WrongType)?,
+                    _ => {
+                        return Err(VmError::WrongType {
+                            expected: DataType::Symbol,
+                            actual: key.spore_type(),
+                        })?
+                    }
                 };
                 strct.insert(*key, *value);
             }
@@ -38,9 +43,17 @@ fn struct_fn(vm: &mut Vm) -> VmResult<Val> {
 fn struct_get_fn(vm: &mut Vm, strct: Val, sym: Val) -> VmResult<Val> {
     let sym = match sym {
         Val::Symbol(x) => x,
-        _ => return Err(VmError::WrongType)?,
+        _ => {
+            return Err(VmError::WrongType {
+                expected: DataType::Symbol,
+                actual: sym.spore_type(),
+            })?
+        }
     };
-    let strct = strct.as_struct(vm).ok_or_else(|| VmError::WrongType)?;
+    let strct = strct.as_struct(vm).ok_or_else(|| VmError::WrongType {
+        expected: DataType::StructT,
+        actual: strct.spore_type(),
+    })?;
     let item = strct
         .get(&sym)
         .copied()
@@ -49,8 +62,14 @@ fn struct_get_fn(vm: &mut Vm, strct: Val, sym: Val) -> VmResult<Val> {
 }
 
 fn struct_set_fn(vm: &mut Vm, strct: Val, sym: Val, val: Val) -> VmResult<Val> {
-    let sym = sym.as_symbol_id().ok_or(VmError::WrongType)?;
-    let strct = strct.as_struct_mut(vm).ok_or(VmError::WrongType)?;
+    let sym = sym.as_symbol_id().ok_or(VmError::WrongType {
+        expected: DataType::Symbol,
+        actual: sym.spore_type(),
+    })?;
+    let strct = strct.as_struct_mut(vm).ok_or(VmError::WrongType {
+        expected: DataType::StructT,
+        actual: strct.spore_type(),
+    })?;
     strct.insert(sym, val);
     Ok(Val::Void)
 }
@@ -140,12 +159,18 @@ mod tests {
         assert_eq!(
             vm.clean_eval_str("(struct-set! 1 'test3 3)")
                 .map_err(VmError::from),
-            Err(VmError::WrongType)
+            Err(VmError::WrongType {
+                expected: DataType::StructT,
+                actual: DataType::Int,
+            })
         );
         assert_eq!(
             vm.clean_eval_str("(struct-set! s 4 3)")
                 .map_err(VmError::from),
-            Err(VmError::WrongType)
+            Err(VmError::WrongType {
+                expected: DataType::Symbol,
+                actual: DataType::Int,
+            })
         );
     }
 }

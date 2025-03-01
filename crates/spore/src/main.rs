@@ -1,8 +1,12 @@
 use std::time::Duration;
 
 use clap::{Parser, ValueEnum};
-use ratatui::{DefaultTerminal, Frame};
-use spore_vm::{error::VmResult, val::symbol::SymbolId, vm::Vm};
+use ratatui::{
+    style::{Color, Style},
+    widgets::{Block, BorderType, Borders},
+    DefaultTerminal, Frame,
+};
+use spore_vm::{error::VmResult, val::symbol::SymbolId, vm::Vm, SporeStruct};
 use widgets::BufferWidget;
 
 mod events;
@@ -54,19 +58,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 #[derive(Copy, Clone)]
 pub struct Symbols {
+    border: SymbolId,
+    title: SymbolId,
+    buffer: SymbolId,
     cursor: SymbolId,
     percent_exit_p: SymbolId,
-    text: SymbolId,
     percent_windows: SymbolId,
+    text: SymbolId,
 }
 
 impl Symbols {
     fn new(vm: &mut Vm) -> Symbols {
         Symbols {
+            border: vm.make_symbol_id("border"),
+            title: vm.make_symbol_id("title"),
+            buffer: vm.make_symbol_id("buffer"),
             cursor: vm.make_symbol_id("cursor"),
             percent_exit_p: vm.make_symbol_id("%exit?"),
-            text: vm.make_symbol_id("text"),
             percent_windows: vm.make_symbol_id("%windows"),
+            text: vm.make_symbol_id("text"),
         }
     }
 }
@@ -74,6 +84,8 @@ impl Symbols {
 fn run(vm: &mut Vm, mut terminal: DefaultTerminal) -> Result<Stats, Box<dyn std::error::Error>> {
     let symbols = Symbols::new(vm);
     let mut stats = Stats::default();
+    vm.clean_eval_str(include_str!("../lisp/buffer.lisp"))
+        .unwrap();
     vm.clean_eval_str(include_str!("../lisp/window.lisp"))
         .unwrap();
     vm.clean_eval_str(include_str!("../lisp/main.lisp"))
@@ -116,15 +128,41 @@ fn draw(frame: &mut Frame, vm: &Vm, symbols: &Symbols) {
         .unwrap();
     for window in windows {
         let window_struct = window.as_struct(vm).unwrap();
-        let text = window_struct
-            .get(&symbols.text)
-            .expect(":text not found in window struct")
-            .as_custom(vm)
-            .expect(":text for window was not a rope");
-        let cursor = window_struct
-            .get(&symbols.cursor)
-            .map(|x| x.as_int().unwrap())
-            .and_then(|x| if x < 0 { None } else { Some(x as usize) });
-        frame.render_widget(BufferWidget::new(text, cursor), frame.area());
+        draw_window(frame, vm, symbols, window_struct);
     }
+}
+
+fn draw_window(frame: &mut Frame, vm: &Vm, symbols: &Symbols, window_struct: &SporeStruct) {
+    let buffer_struct = window_struct
+        .get(&symbols.buffer)
+        .expect(":buffer not found in window")
+        .as_struct(vm)
+        .unwrap();
+    let text = buffer_struct
+        .get(&symbols.text)
+        .expect(":text not found in buffer struct")
+        .as_custom(vm)
+        .expect(":text for buffer was not a rope");
+    let cursor = buffer_struct
+        .get(&symbols.cursor)
+        .map(|x| x.as_int().unwrap())
+        .and_then(|x| if x < 0 { None } else { Some(x as usize) });
+    let mut area = frame.area();
+    if window_struct
+        .get(&symbols.border)
+        .map(|v| v.is_truthy())
+        .unwrap_or(false)
+    {
+        let mut block = Block::new()
+            .border_type(BorderType::Rounded)
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Color::White))
+            .style(Style::default().bg(Color::Black));
+        if let Some(title) = window_struct.get(&symbols.title).and_then(|v| v.as_str(vm)) {
+            block = block.title(title);
+        };
+        frame.render_widget(&block, area);
+        area = block.inner(area);
+    }
+    frame.render_widget(BufferWidget::new(text, cursor), area);
 }

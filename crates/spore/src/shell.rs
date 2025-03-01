@@ -1,7 +1,11 @@
 use std::process::Stdio;
 
 use compact_str::{format_compact, CompactString};
-use spore_vm::{error::VmError, val::native_function::NativeFunction, vm::Vm};
+use spore_vm::{
+    error::VmError,
+    val::{native_function::NativeFunction, DataType},
+    vm::Vm,
+};
 
 pub fn register_shell(vm: &mut Vm) {
     vm.register_native_function(NativeFunction::new("shell-command!", |vm: &mut Vm| {
@@ -11,10 +15,16 @@ pub fn register_shell(vm: &mut Vm) {
             expected: 1,
             actual: 0,
         })?;
-        let mut cmd = std::process::Command::new(cmd_val.as_str(vm).ok_or(VmError::WrongType)?);
+        let mut cmd = std::process::Command::new(cmd_val.as_str(vm).ok_or(VmError::WrongType {
+            expected: DataType::String,
+            actual: cmd_val.spore_type(),
+        })?);
         cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
         for arg in args {
-            let arg_str = arg.as_str(vm).ok_or(VmError::WrongType)?;
+            let arg_str = arg.as_str(vm).ok_or(VmError::WrongType {
+                expected: DataType::String,
+                actual: arg.spore_type(),
+            })?;
             cmd.arg(arg_str);
         }
         let output = cmd
