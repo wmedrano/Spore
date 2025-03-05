@@ -13,6 +13,14 @@
 (define (active-window)
     (nth (unbox %windows) 0))
 
+(define (window-add-window! window)
+  (box-set! %windows (list-concat (unbox %windows)
+                                  (list window))))
+(define (window-remove-window! window)
+  (box-set! %windows
+            (filter (lambda (w) (not (= w window)))
+                    (unbox %windows))))
+
 (define (window-buffer window)
   (struct-get window :buffer))
 

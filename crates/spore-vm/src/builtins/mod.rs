@@ -28,6 +28,7 @@ pub fn register_builtins(vm: &mut Vm) {
     .register_native_function(NativeFunction::with_args_1("val->string", val_to_string_fn))
     .register_native_function(NativeFunction::with_args_1("val->type", val_to_type_fn))
     .register_native_function(NativeFunction::with_args_2("=", equal_fn))
+    .register_native_function(NativeFunction::with_args_1("not", not_fn))
     .register_native_function(NativeFunction::with_args_0("help", help_fn))
     .apply_mut(math::register)
     .apply_mut(strings::register)
@@ -136,6 +137,10 @@ fn equal_fn_impl(vm: &Vm, a: Val, b: Val) -> bool {
 
 fn equal_fn(vm: &mut Vm, a: Val, b: Val) -> VmResult<Val> {
     Ok(Val::Bool(equal_fn_impl(vm, a, b)))
+}
+
+fn not_fn(_: &mut Vm, a: Val) -> VmResult<Val> {
+    Ok(Val::Bool(!a.is_truthy()))
 }
 
 /// Print the help.
