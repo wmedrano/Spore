@@ -22,10 +22,12 @@ fn list_fn(vm: &mut Vm) -> VmResult<Val> {
 
 fn list_concat_fn(vm: &mut Vm, a: Val, b: Val) -> VmResult<Val> {
     let a = a.as_list(vm).ok_or_else(|| VmError::WrongType {
+        function_name: "list-concat".into(),
         expected: DataType::List,
         actual: a.spore_type(),
     })?;
     let b = b.as_list(vm).ok_or_else(|| VmError::WrongType {
+        function_name: "list-concat".into(),
         expected: DataType::List,
         actual: b.spore_type(),
     })?;
@@ -72,6 +74,7 @@ fn filter_fn(vm: &mut Vm, pred: Val, lst: Val) -> VmResult<Val> {
 
 fn list_len_fn(vm: &mut Vm, lst: Val) -> VmResult<Val> {
     let lst = lst.as_list(vm).ok_or_else(|| VmError::WrongType {
+        function_name: "".into(),
         expected: DataType::List,
         actual: lst.spore_type(),
     })?;
@@ -80,6 +83,7 @@ fn list_len_fn(vm: &mut Vm, lst: Val) -> VmResult<Val> {
 
 fn list_empty_fn(vm: &mut Vm, lst: Val) -> VmResult<Val> {
     let lst = lst.as_list(vm).ok_or_else(|| VmError::WrongType {
+        function_name: "list-empty?".into(),
         expected: DataType::List,
         actual: lst.spore_type(),
     })?;
@@ -96,12 +100,14 @@ fn nth_fn(vm: &mut Vm, lst: Val, idx: Val) -> VmResult<Val> {
         }
         _ => {
             return Err(VmError::WrongType {
+                function_name: "".into(),
                 expected: DataType::Int,
                 actual: idx.spore_type(),
             })?
         }
     };
     let lst = lst.as_list(vm).ok_or_else(|| VmError::WrongType {
+        function_name: "".into(),
         expected: DataType::List,
         actual: lst.spore_type(),
     })?;
@@ -217,6 +223,7 @@ mod tests {
         assert_eq!(
             got,
             Err(VmError::WrongType {
+                function_name: "".into(),
                 expected: DataType::List,
                 actual: DataType::Int
             })
@@ -257,6 +264,7 @@ mod tests {
         assert_eq!(
             got,
             Err(VmError::WrongType {
+                function_name: "".into(),
                 expected: DataType::List,
                 actual: DataType::Int
             })
@@ -271,6 +279,7 @@ mod tests {
         assert_eq!(
             got,
             Err(VmError::WrongType {
+                function_name: "".into(),
                 expected: DataType::Int,
                 actual: DataType::Bool
             })

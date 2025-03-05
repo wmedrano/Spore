@@ -32,6 +32,7 @@ pub fn register_rope(vm: &mut Vm) {
         "new-rope",
         |vm: &mut Vm, text: Val| {
             let text = text.as_str(vm).ok_or(VmError::WrongType {
+                function_name: "new-rope".into(),
                 expected: DataType::String,
                 actual: text.spore_type(),
             })?;
@@ -42,6 +43,7 @@ pub fn register_rope(vm: &mut Vm) {
         "new-rope-with-file",
         |vm: &mut Vm, filename: Val| {
             let filename = filename.as_str(vm).ok_or(VmError::WrongType {
+                function_name: "new-rope-with-file".into(),
                 expected: DataType::String,
                 actual: filename.spore_type(),
             })?;
@@ -58,6 +60,7 @@ pub fn register_rope(vm: &mut Vm) {
         "rope-len",
         |vm: &mut Vm, buffer: Val| {
             let rope: &SporeRope = buffer.as_custom(vm).ok_or(VmError::WrongType {
+                function_name: "rope-len".into(),
                 expected: DataType::Custom,
                 actual: buffer.spore_type(),
             })?;
@@ -68,10 +71,12 @@ pub fn register_rope(vm: &mut Vm) {
         "rope-insert!",
         |vm: &mut Vm, buffer: Val, pos: Val, text: Val| {
             let pos = pos.as_int().ok_or(VmError::WrongType {
+                function_name: "rope-insert!".into(),
                 expected: DataType::Int,
                 actual: pos.spore_type(),
             })? as usize;
             let text = text.as_str(vm).ok_or(VmError::WrongType {
+                function_name: "rope-insert!".into(),
                 expected: DataType::String,
                 actual: text.spore_type(),
             })?;
@@ -81,6 +86,7 @@ pub fn register_rope(vm: &mut Vm) {
                 let unsafe_text: &'static str = unsafe { std::mem::transmute(text) };
                 let buffer: &mut SporeRope =
                     buffer.as_custom_mut(vm).ok_or(VmError::WrongType {
+                        function_name: "rope-insert!".into(),
                         expected: DataType::Custom,
                         actual: buffer.spore_type(),
                     })?;
@@ -93,10 +99,12 @@ pub fn register_rope(vm: &mut Vm) {
         "rope-delete!",
         |vm: &mut Vm, buffer: Val, pos: Val| {
             let pos = pos.as_int().ok_or(VmError::WrongType {
+                function_name: "rope-delete!".into(),
                 expected: DataType::Int,
                 actual: pos.spore_type(),
             })? as usize;
             let buffer: &mut SporeRope = buffer.as_custom_mut(vm).ok_or(VmError::WrongType {
+                function_name: "rope-delete!".into(),
                 expected: DataType::Custom,
                 actual: buffer.spore_type(),
             })?;
@@ -110,12 +118,14 @@ pub fn register_rope(vm: &mut Vm) {
             let rope_len = rope
                 .as_custom::<SporeRope>(vm)
                 .ok_or(VmError::WrongType {
+                    function_name: "rope-normalize-cursor".into(),
                     expected: DataType::Custom,
                     actual: rope.spore_type(),
                 })?
                 .inner
                 .byte_len();
             let pos = cursor.as_int().ok_or(VmError::WrongType {
+                function_name: "rope-normalize-cursor".into(),
                 expected: DataType::Int,
                 actual: cursor.spore_type(),
             })?;
@@ -126,6 +136,7 @@ pub fn register_rope(vm: &mut Vm) {
         "rope->string",
         |vm: &mut Vm, rope: Val| {
             let rope: &SporeRope = rope.as_custom(vm).ok_or(VmError::WrongType {
+                function_name: "rope->string".into(),
                 expected: DataType::Custom,
                 actual: rope.spore_type(),
             })?;

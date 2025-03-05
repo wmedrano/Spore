@@ -16,11 +16,12 @@ pub enum VmError {
     SymbolNotFound(SymbolId),
     NotCallable(Val),
     WrongType {
+        function_name: CompactString,
         expected: DataType,
         actual: DataType,
     },
     WrongArity {
-        name: CompactString,
+        function_name: CompactString,
         expected: u32,
         actual: u32,
     },
@@ -51,12 +52,16 @@ impl std::fmt::Display for VmError {
                 write!(f, "symbol {} not found", symbol_id.as_num())
             }
             VmError::NotCallable(val) => write!(f, "val {val:?} is not callable"),
-            VmError::WrongType { expected, actual } => write!(
+            VmError::WrongType {
+                function_name: name,
+                expected,
+                actual,
+            } => write!(
                 f,
-                "wrong type encountered, expected {expected:?} but got {actual:?}"
+                "wrong type encountered in {name}, expected {expected:?} but got {actual:?}"
             ),
             VmError::WrongArity {
-                name,
+                function_name: name,
                 expected,
                 actual,
             } => write!(
@@ -124,12 +129,16 @@ impl std::fmt::Display for VmErrorWithContext<'_> {
                 tp = val.spore_type(),
                 val = val.formatted(self.vm)
             ),
-            VmError::WrongType { expected, actual } => write!(
+            VmError::WrongType {
+                function_name: name,
+                expected,
+                actual,
+            } => write!(
                 f,
-                "wrong type encountered, expected {expected:?} but got {actual:?}"
+                "wrong type encountered in {name}, expected {expected:?} but got {actual:?}"
             ),
             VmError::WrongArity {
-                name,
+                function_name: name,
                 expected,
                 actual,
             } => write!(

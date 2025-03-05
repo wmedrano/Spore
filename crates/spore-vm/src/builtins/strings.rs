@@ -10,6 +10,7 @@ pub fn register(vm: &mut Vm) {
 
 fn string_len_fn(vm: &mut Vm, s: Val) -> VmResult<Val> {
     let s = s.as_str(vm).ok_or_else(|| VmError::WrongType {
+        function_name: "string-len".into(),
         expected: DataType::String,
         actual: s.spore_type(),
     })?;

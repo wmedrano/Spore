@@ -48,7 +48,7 @@ impl NativeFunction {
             match args {
                 [] => f(vm),
                 _ => Err(VmError::WrongArity {
-                    name: CompactString::const_new(name),
+                    function_name: CompactString::const_new(name),
                     expected: 0,
                     actual: args.len() as u32,
                 })?,
@@ -67,7 +67,7 @@ impl NativeFunction {
             match args {
                 [arg] => f(vm, *arg),
                 _ => Err(VmError::WrongArity {
-                    name: CompactString::const_new(name),
+                    function_name: CompactString::const_new(name),
                     expected: 1,
                     actual: args.len() as u32,
                 })?,
@@ -86,7 +86,7 @@ impl NativeFunction {
             match args {
                 [arg1, arg2] => f(vm, *arg1, *arg2),
                 _ => Err(VmError::WrongArity {
-                    name: CompactString::const_new(name),
+                    function_name: CompactString::const_new(name),
                     expected: 2,
                     actual: args.len() as u32,
                 })?,
@@ -105,7 +105,7 @@ impl NativeFunction {
             match args {
                 [arg1, arg2, arg3] => f(vm, *arg1, *arg2, *arg3),
                 _ => Err(VmError::WrongArity {
-                    name: CompactString::const_new(name),
+                    function_name: CompactString::const_new(name),
                     expected: 3,
                     actual: args.len() as u32,
                 })?,

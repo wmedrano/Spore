@@ -40,6 +40,7 @@ pub fn register_builtins(vm: &mut Vm) {
 /// Defines a symbol in the global scope.
 fn define_fn(vm: &mut Vm, sym: Val, val: Val) -> VmResult<Val> {
     let sym = sym.as_symbol_id().ok_or_else(|| VmError::WrongType {
+        function_name: "define".into(),
         expected: DataType::Symbol,
         actual: sym.spore_type(),
     })?;
@@ -51,6 +52,7 @@ fn apply_fn(vm: &mut Vm, f: Val, args: Val) -> VmResult<Val> {
     let args = args
         .as_list(vm)
         .ok_or_else(|| VmError::WrongType {
+            function_name: "apply".into(),
             expected: DataType::List,
             actual: args.spore_type(),
         })?

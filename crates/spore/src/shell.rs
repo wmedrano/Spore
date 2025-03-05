@@ -11,17 +11,19 @@ pub fn register_shell(vm: &mut Vm) {
     vm.register_native_function(NativeFunction::new("shell-command!", |vm: &mut Vm| {
         let mut args = vm.args().iter().copied();
         let cmd_val = args.next().ok_or_else(|| VmError::WrongArity {
-            name: "shell-command!".into(),
+            function_name: "shell-command!".into(),
             expected: 1,
             actual: 0,
         })?;
         let mut cmd = std::process::Command::new(cmd_val.as_str(vm).ok_or(VmError::WrongType {
+            function_name: "shell-command!".into(),
             expected: DataType::String,
             actual: cmd_val.spore_type(),
         })?);
         cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
         for arg in args {
             let arg_str = arg.as_str(vm).ok_or(VmError::WrongType {
+                function_name: "shell-command!".into(),
                 expected: DataType::String,
                 actual: arg.spore_type(),
             })?;

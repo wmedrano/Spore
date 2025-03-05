@@ -21,6 +21,7 @@ fn struct_fn(vm: &mut Vm) -> VmResult<Val> {
                     Val::Symbol(symbol_id) => symbol_id,
                     _ => {
                         return Err(VmError::WrongType {
+                            function_name: "struct".into(),
                             expected: DataType::Symbol,
                             actual: key.spore_type(),
                         })?
@@ -30,7 +31,7 @@ fn struct_fn(vm: &mut Vm) -> VmResult<Val> {
             }
             _ => {
                 return Err(VmError::WrongArity {
-                    name: "struct".into(),
+                    function_name: "struct".into(),
                     expected: args.len() as u32 + 1,
                     actual: args.len() as u32,
                 })?
@@ -45,12 +46,14 @@ fn struct_get_fn(vm: &mut Vm, strct: Val, sym: Val) -> VmResult<Val> {
         Val::Symbol(x) => x,
         _ => {
             return Err(VmError::WrongType {
+                function_name: "struct-get".into(),
                 expected: DataType::Symbol,
                 actual: sym.spore_type(),
             })?
         }
     };
     let strct = strct.as_struct(vm).ok_or_else(|| VmError::WrongType {
+        function_name: "struct-get".into(),
         expected: DataType::StructT,
         actual: strct.spore_type(),
     })?;
@@ -63,10 +66,12 @@ fn struct_get_fn(vm: &mut Vm, strct: Val, sym: Val) -> VmResult<Val> {
 
 fn struct_set_fn(vm: &mut Vm, strct: Val, sym: Val, val: Val) -> VmResult<Val> {
     let sym = sym.as_symbol_id().ok_or(VmError::WrongType {
+        function_name: "".into(),
         expected: DataType::Symbol,
         actual: sym.spore_type(),
     })?;
     let strct = strct.as_struct_mut(vm).ok_or(VmError::WrongType {
+        function_name: "".into(),
         expected: DataType::StructT,
         actual: strct.spore_type(),
     })?;
@@ -160,6 +165,7 @@ mod tests {
             vm.clean_eval_str("(struct-set! 1 'test3 3)")
                 .map_err(VmError::from),
             Err(VmError::WrongType {
+                function_name: "".into(),
                 expected: DataType::StructT,
                 actual: DataType::Int,
             })
@@ -168,6 +174,7 @@ mod tests {
             vm.clean_eval_str("(struct-set! s 4 3)")
                 .map_err(VmError::from),
             Err(VmError::WrongType {
+                function_name: "".into(),
                 expected: DataType::Symbol,
                 actual: DataType::Int,
             })

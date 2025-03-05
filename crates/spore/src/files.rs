@@ -10,6 +10,7 @@ pub fn register_files(vm: &mut Vm) {
         "file-read",
         |vm: &mut Vm, filename: Val| {
             let filename = filename.as_str(vm).ok_or_else(|| VmError::WrongType {
+                function_name: "file-read".into(),
                 expected: DataType::String,
                 actual: filename.spore_type(),
             })?;

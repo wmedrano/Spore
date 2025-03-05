@@ -21,6 +21,7 @@ fn plus_fn(_: &Vm, args: &[Val]) -> VmResult<Val> {
             Val::Float(x) => float_sum += *x,
             _ => {
                 return Err(VmError::WrongType {
+                    function_name: "+".into(),
                     expected: DataType::Float,
                     actual: arg.spore_type(),
                 })?
@@ -39,7 +40,7 @@ fn plus_fn(_: &Vm, args: &[Val]) -> VmResult<Val> {
 fn minus_fn(vm: &Vm, args: &[Val]) -> VmResult<Val> {
     match args {
         [] => Err(VmError::WrongArity {
-            name: "-".into(),
+            function_name: "-".into(),
             expected: 1,
             actual: 0,
         })?,
@@ -74,10 +75,12 @@ fn less_fn(_: &Vm, args: &[Val]) -> VmResult<Val> {
         (Val::Int(a), Val::Float(b)) => Ok((a as f64) < b),
         (Val::Float(a), Val::Int(b)) => Ok(a < (b as f64)),
         (Val::Int(_), _) | (Val::Float(_), _) => Err(VmError::WrongType {
+            function_name: "".into(),
             expected: DataType::Float,
             actual: b.spore_type(),
         })?,
         _ => Err(VmError::WrongType {
+            function_name: "".into(),
             expected: DataType::Float,
             actual: a.spore_type(),
         })?,
@@ -92,10 +95,12 @@ fn greater_fn(_: &Vm, args: &[Val]) -> VmResult<Val> {
         (Val::Int(a), Val::Float(b)) => Ok((a as f64) > b),
         (Val::Float(a), Val::Int(b)) => Ok(a > (b as f64)),
         (Val::Int(_), _) | (Val::Float(_), _) => Err(VmError::WrongType {
+            function_name: ">".into(),
             expected: DataType::Float,
             actual: b.spore_type(),
         })?,
         _ => Err(VmError::WrongType {
+            function_name: ">".into(),
             expected: DataType::Float,
             actual: a.spore_type(),
         })?,
@@ -123,6 +128,7 @@ mod tests {
             vm.clean_eval_str("(+ -1 2 -3 4 false)")
                 .map_err(VmError::from),
             Err(VmError::WrongType {
+                function_name: "+".into(),
                 expected: DataType::Float,
                 actual: DataType::Bool
             })
@@ -154,7 +160,7 @@ mod tests {
         assert_eq!(
             vm.clean_eval_str("(-)").map_err(VmError::from),
             Err(VmError::WrongArity {
-                name: "-".into(),
+                function_name: "-".into(),
                 expected: 1,
                 actual: 0
             }
@@ -225,6 +231,7 @@ mod tests {
         assert_eq!(
             vm.clean_eval_str("(< false true)").map_err(VmError::from),
             Err(VmError::WrongType {
+                function_name: "".into(),
                 expected: DataType::Float,
                 actual: DataType::Bool,
             })

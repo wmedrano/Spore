@@ -366,7 +366,7 @@ impl Vm {
                 let arg_count = n as u32 - 1;
                 if function.args != arg_count {
                     return Err(VmError::WrongArity {
-                        name: function
+                        function_name: function
                             .name
                             .clone()
                             .unwrap_or(CompactString::const_new("")),
@@ -537,7 +537,7 @@ mod tests {
                 .map_err(VmError::from)
                 .unwrap_err(),
             VmError::WrongArity {
-                name: "foo".into(),
+                function_name: "foo".into(),
                 expected: 3,
                 actual: 1
             }

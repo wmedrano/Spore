@@ -16,6 +16,7 @@ fn box_fn(vm: &mut Vm, v: Val) -> VmResult<Val> {
 
 fn unbox_fn(vm: &mut Vm, v: Val) -> VmResult<Val> {
     let unboxed = v.unbox(vm).ok_or_else(|| VmError::WrongType {
+        function_name: "unbox".into(),
         expected: DataType::Box,
         actual: v.spore_type(),
     })?;
@@ -24,6 +25,7 @@ fn unbox_fn(vm: &mut Vm, v: Val) -> VmResult<Val> {
 
 fn box_set_fn(vm: &mut Vm, boxed_val: Val, v: Val) -> VmResult<Val> {
     let b = boxed_val.unbox_mut(vm).ok_or_else(|| VmError::WrongType {
+        function_name: "box-set!".into(),
         expected: DataType::Box,
         actual: v.spore_type(),
     })?;
