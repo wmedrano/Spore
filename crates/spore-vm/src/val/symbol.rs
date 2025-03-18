@@ -16,9 +16,8 @@ impl SymbolId {
 #[derive(Default)]
 /// A table mapping symbols to names.
 pub struct SymbolTable {
-    id_to_name: HashMap<SymbolId, CompactString>,
+    idx_to_name: Vec<CompactString>,
     name_to_id: HashMap<CompactString, SymbolId>,
-    next_id: u32,
 }
 
 impl SymbolTable {
@@ -27,9 +26,8 @@ impl SymbolTable {
         match self.name_to_id.get(name) {
             Some(id) => *id,
             None => {
-                let id = SymbolId(self.next_id);
-                self.next_id += 1;
-                self.id_to_name.insert(id, CompactString::new(name));
+                let id = SymbolId(self.idx_to_name.len() as u32);
+                self.idx_to_name.push(CompactString::new(name));
                 self.name_to_id.insert(CompactString::new(name), id);
                 id
             }
@@ -43,12 +41,14 @@ impl SymbolTable {
 
     /// Returns the name for a given symbol ID.
     pub fn symbol_name(&self, id: SymbolId) -> Option<&str> {
-        self.id_to_name.get(&id).map(CompactString::as_str)
+        self.idx_to_name
+            .get(id.0 as usize)
+            .map(CompactString::as_str)
     }
 }
 
 impl std::fmt::Debug for SymbolTable {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.id_to_name.fmt(f)
+        self.idx_to_name.fmt(f)
     }
 }
