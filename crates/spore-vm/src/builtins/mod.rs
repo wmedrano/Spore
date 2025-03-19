@@ -10,10 +10,10 @@ pub const INTERNAL_DEFINE_FUNCTION: &str = "%define";
 use compact_str::format_compact;
 
 use crate::{
-    error::{VmError, VmResult},
-    val::{native_function::NativeFunction, DataType, Val},
-    vm::Vm,
     SporeList,
+    error::{VmError, VmResult},
+    val::{DataType, Val, native_function::NativeFunction},
+    vm::Vm,
 };
 
 /// Registers the built-in functions in the VM.
@@ -150,7 +150,7 @@ fn help_fn(vm: &mut Vm) -> VmResult<Val> {
     let mut symbols: SporeList = vm.globals.values.keys().map(|k| Val::Symbol(*k)).collect();
     symbols.sort_by_key(|k| {
         k.as_symbol_id()
-            .map(|id| vm.objects.symbols.symbol_name(id).unwrap_or(""))
+            .map(|id| vm.objects.symbols.identifier(id).unwrap_or(""))
     });
     let val = Val::List(vm.objects.register_list(symbols));
     Ok(val)
@@ -161,7 +161,7 @@ mod tests {
     use crate::{
         error::VmError,
         register_spore_type,
-        val::{native_function::NativeFunction, Val},
+        val::{Val, native_function::NativeFunction},
         vm::Vm,
     };
 

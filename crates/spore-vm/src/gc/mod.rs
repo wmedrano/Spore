@@ -4,13 +4,13 @@ use compact_str::CompactString;
 use typed_object_store::{GcColor, TypedObjectStore};
 
 use crate::{
+    SporeCustomType, SporeList, SporeStruct,
     module::Module,
     val::{
-        bytecode_function::ByteCodeFunction, custom::SporeCustom, native_function::NativeFunction,
-        symbol::SymbolTable, Val,
+        Val, bytecode_function::ByteCodeFunction, custom::SporeCustom, identifier::IdentifierTable,
+        native_function::NativeFunction,
     },
     vm::StackFrame,
-    SporeCustomType, SporeList, SporeStruct,
 };
 
 mod id;
@@ -39,7 +39,7 @@ pub struct Objects {
     /// The store for box objects.
     pub boxes: TypedObjectStore<Val>,
     /// The symbol table.
-    pub symbols: SymbolTable,
+    pub symbols: IdentifierTable,
     /// The null bytecode function.
     pub null_bytecode: ByteCodeFunction,
 }

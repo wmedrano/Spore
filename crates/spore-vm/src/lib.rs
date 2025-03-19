@@ -1,6 +1,6 @@
 use std::{collections::HashMap, rc::Rc};
 
-use val::{symbol::SymbolId, Val};
+use val::{Val, identifier::IdentifierId};
 
 /// Builtin functions.
 pub mod builtins;
@@ -23,7 +23,7 @@ pub mod vm;
 pub type SporeRc<T> = Rc<T>;
 
 /// The physical struct representation.
-pub type SporeStruct = HashMap<SymbolId, Val>;
+pub type SporeStruct = HashMap<IdentifierId, Val>;
 
 /// The physical list representation.
 pub type SporeList = Vec<Val>;

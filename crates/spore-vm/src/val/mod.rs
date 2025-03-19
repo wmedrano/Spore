@@ -1,15 +1,15 @@
 pub mod bytecode_function;
 pub mod custom;
+pub mod identifier;
 pub mod native_function;
-pub mod symbol;
 
 use bytecode_function::ByteCodeFunction;
 use compact_str::CompactString;
 use custom::SporeCustom;
+use identifier::IdentifierId;
 use native_function::NativeFunction;
-use symbol::SymbolId;
 
-use crate::{gc::ObjectId, vm::Vm, SporeCustomType, SporeList, SporeStruct};
+use crate::{SporeCustomType, SporeList, SporeStruct, gc::ObjectId, vm::Vm};
 
 /// The maximum length of a short string.
 ///
@@ -56,7 +56,7 @@ pub enum Val {
     /// Represents a floating-point number.
     Float(f64),
     /// Represents a symbol.
-    Symbol(SymbolId),
+    Symbol(IdentifierId),
     /// Contains a string.
     String(ObjectId<CompactString>),
     /// Contains a short string.
@@ -179,7 +179,7 @@ impl Val {
     }
 
     /// Returns the symbol id or `None` if the value is not a symbol.
-    pub fn as_symbol_id(self) -> Option<SymbolId> {
+    pub fn as_symbol_id(self) -> Option<IdentifierId> {
         match self {
             Val::Symbol(x) => Some(x),
             _ => None,

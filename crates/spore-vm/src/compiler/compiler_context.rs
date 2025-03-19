@@ -5,7 +5,7 @@ use compact_str::CompactString;
 use crate::{
     builtins,
     instruction::Instruction,
-    val::{bytecode_function::ByteCodeFunction, symbol::SymbolId, Val},
+    val::{Val, bytecode_function::ByteCodeFunction, identifier::IdentifierId},
     vm::Vm,
 };
 
@@ -39,8 +39,8 @@ pub enum CompilerScope {
 enum ResolvedVariable {
     Argument(usize),
     Local(usize),
-    Captured(SymbolId),
-    Global(SymbolId),
+    Captured(IdentifierId),
+    Global(IdentifierId),
 }
 
 fn swap_kv<K: Clone, V: Clone + std::hash::Hash + Eq>(m: &HashMap<K, V>) -> HashMap<V, K> {
@@ -182,7 +182,7 @@ impl<'a> CompilerContext<'a> {
             self.vm
                 .objects
                 .symbols
-                .make_symbol_id(builtins::INTERNAL_DEFINE_FUNCTION),
+                .make_identifier_id(builtins::INTERNAL_DEFINE_FUNCTION),
         ));
         dst.push(Instruction::Push(Val::Symbol(
             self.vm.make_symbol_id(symbol),

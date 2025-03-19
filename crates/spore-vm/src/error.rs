@@ -2,7 +2,7 @@ use compact_str::CompactString;
 
 use crate::{
     compiler::{ast::AstError, error::CompileError},
-    val::{symbol::SymbolId, DataType, Val},
+    val::{DataType, Val, identifier::IdentifierId},
     vm::Vm,
 };
 
@@ -13,7 +13,7 @@ pub type VmResult<T> = Result<T, VmError>;
 /// Represents errors that can occur during VM execution.
 pub enum VmError {
     Compile(CompileError),
-    SymbolNotFound(SymbolId),
+    SymbolNotFound(IdentifierId),
     NotCallable(Val),
     WrongType {
         function_name: CompactString,

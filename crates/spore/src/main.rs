@@ -2,11 +2,11 @@ use std::time::Duration;
 
 use clap::{Parser, ValueEnum};
 use ratatui::{
+    DefaultTerminal, Frame,
     style::{Color, Style},
     widgets::{Block, BorderType, Borders},
-    DefaultTerminal, Frame,
 };
-use spore_vm::{error::VmResult, val::symbol::SymbolId, vm::Vm, SporeStruct};
+use spore_vm::{SporeStruct, error::VmResult, val::identifier::IdentifierId, vm::Vm};
 use widgets::BufferWidget;
 
 mod events;
@@ -58,13 +58,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 #[derive(Copy, Clone)]
 pub struct Symbols {
-    border: SymbolId,
-    title: SymbolId,
-    buffer: SymbolId,
-    cursor: SymbolId,
-    percent_exit_p: SymbolId,
-    percent_windows: SymbolId,
-    text: SymbolId,
+    border: IdentifierId,
+    title: IdentifierId,
+    buffer: IdentifierId,
+    cursor: IdentifierId,
+    percent_exit_p: IdentifierId,
+    percent_windows: IdentifierId,
+    text: IdentifierId,
 }
 
 impl Symbols {

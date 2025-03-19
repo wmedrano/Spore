@@ -1,12 +1,12 @@
 use std::collections::HashMap;
 
-use crate::val::{symbol::SymbolId, Val};
+use crate::val::{Val, identifier::IdentifierId};
 
 #[derive(Debug)]
 /// A module containing named values.
 pub struct Module {
     /// The named values in this module.
-    pub values: HashMap<SymbolId, Val>,
+    pub values: HashMap<IdentifierId, Val>,
 }
 
 impl Module {

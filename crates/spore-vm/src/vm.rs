@@ -2,6 +2,7 @@ use bumpalo::Bump;
 use compact_str::CompactString;
 
 use crate::{
+    SporeCustomType, SporeList, SporeRc, SporeStruct,
     builtins::register_builtins,
     compiler::ast::Ast,
     error::{VmError, VmErrorWithContext, VmResult},
@@ -9,10 +10,9 @@ use crate::{
     instruction::Instruction,
     module::Module,
     val::{
-        bytecode_function::ByteCodeFunction, native_function::NativeFunction, symbol::SymbolId,
-        ShortString, Val,
+        ShortString, Val, bytecode_function::ByteCodeFunction, identifier::IdentifierId,
+        native_function::NativeFunction,
     },
-    SporeCustomType, SporeList, SporeRc, SporeStruct,
 };
 
 #[derive(Debug)]
@@ -77,7 +77,7 @@ impl Vm {
     /// from spore code. It checks for name conflicts and adds the function to the
     /// global module.
     pub fn register_native_function(&mut self, f: NativeFunction) -> &mut Self {
-        let symbol = self.objects.symbols.make_symbol_id(f.name());
+        let symbol = self.objects.symbols.make_identifier_id(f.name());
         assert!(
             !self.globals.values.contains_key(&symbol),
             "register_function called with existing function named {name}.",
@@ -92,7 +92,7 @@ impl Vm {
     }
 
     /// Set a global value.
-    pub fn set_global(&mut self, symbol: SymbolId, value: Val) {
+    pub fn set_global(&mut self, symbol: IdentifierId, value: Val) {
         self.globals.values.insert(symbol, value);
     }
 
@@ -103,13 +103,13 @@ impl Vm {
     }
 
     /// Get a global value or `None` if it does not exist.
-    pub fn get_global(&self, symbol: SymbolId) -> Option<Val> {
+    pub fn get_global(&self, symbol: IdentifierId) -> Option<Val> {
         self.globals.values.get(&symbol).copied()
     }
 
     /// Get a global value by name or `None` if it does not exist.
     pub fn get_global_by_name(&self, name: &str) -> Option<Val> {
-        let symbol = self.objects.symbols.symbol_id(name)?;
+        let symbol = self.objects.symbols.identifier_id(name)?;
         self.get_global(symbol)
     }
 
@@ -128,18 +128,18 @@ impl Vm {
     /// Given a `SymbolId`, this function attempts to retrieve the corresponding name
     /// from the symbol table. It returns `Some(&str)` if the symbol is found, and `None`
     /// otherwise.
-    pub fn symbol_name(&self, symbol_id: SymbolId) -> Option<&str> {
-        self.objects.symbols.symbol_name(symbol_id)
+    pub fn symbol_name(&self, symbol_id: IdentifierId) -> Option<&str> {
+        self.objects.symbols.identifier(symbol_id)
     }
 
     /// Make a new symbol and return it as a symbol id.
-    pub fn make_symbol_id(&mut self, name: &str) -> SymbolId {
-        self.objects.symbols.make_symbol_id(name)
+    pub fn make_symbol_id(&mut self, name: &str) -> IdentifierId {
+        self.objects.symbols.make_identifier_id(name)
     }
 
     /// Get the symbol id or return `None` if it does not exist.
-    pub fn symbol_id(&self, name: &str) -> Option<SymbolId> {
-        self.objects.symbols.symbol_id(name)
+    pub fn symbol_id(&self, name: &str) -> Option<IdentifierId> {
+        self.objects.symbols.identifier_id(name)
     }
 
     /// Make a new symbol and return it as a `Val`.

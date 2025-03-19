@@ -1,6 +1,6 @@
 use crate::{
     gc::ObjectId,
-    val::{bytecode_function::ByteCodeFunction, symbol::SymbolId, Val},
+    val::{Val, bytecode_function::ByteCodeFunction, identifier::IdentifierId},
     vm::Vm,
 };
 
@@ -18,7 +18,7 @@ pub enum Instruction {
     /// Sets the value for the stakc.
     Set(usize),
     /// Dereferences a symbol.
-    Deref(SymbolId),
+    Deref(IdentifierId),
     /// Jump N instructions.
     Jump(usize),
     /// Jump N instructions if the top value in the stack is truthy.
