@@ -298,7 +298,7 @@ impl ValFormatter<'_> {
             Val::ShortString(s) => write!(f, "{}", s.as_str()),
             Val::String(string_id) => match self.vm.objects.strings.get(string_id) {
                 Some(x) => write!(f, "{x}"),
-                None => write!(f, "(gc-string-{})", string_id.as_num()),
+                None => write!(f, "(gc-string-{})", string_id.num()),
             },
             Val::List(list_id) => match self.vm.objects.lists.get(list_id) {
                 Some(lst) => {
@@ -311,7 +311,7 @@ impl ValFormatter<'_> {
                     }
                     write!(f, ")")
                 }
-                None => write!(f, "(gc-list-{})", list_id.as_num()),
+                None => write!(f, "(gc-list-{})", list_id.num()),
             },
             Val::Struct(struct_id) => match self.vm.objects.structs.get(struct_id) {
                 Some(lst) => {
@@ -327,12 +327,12 @@ impl ValFormatter<'_> {
                     }
                     write!(f, ")")
                 }
-                None => write!(f, "(gc-list-{})", struct_id.as_num()),
+                None => write!(f, "(gc-list-{})", struct_id.num()),
             },
             Val::NativeFunction(object_id) => {
                 match self.vm.objects.native_functions.get(object_id) {
                     Some(func) => write!(f, "(native-fn-{})", func.name()),
-                    None => write!(f, "(native-fn-{})", object_id.as_num()),
+                    None => write!(f, "(native-fn-{})", object_id.num()),
                 }
             }
             Val::BytecodeFunction {
@@ -349,7 +349,7 @@ impl ValFormatter<'_> {
                             None => "lambda",
                         },
                     ),
-                    None => write!(f, "(fn-{num}{suffix})", num = function.as_num()),
+                    None => write!(f, "(fn-{num}{suffix})", num = function.num()),
                 }
             }
             Val::Custom(object_id) => match self.vm.objects.custom.get(object_id) {

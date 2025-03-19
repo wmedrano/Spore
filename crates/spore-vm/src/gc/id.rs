@@ -1,18 +1,36 @@
-use std::{marker::PhantomData, num::NonZeroU32};
+use std::marker::PhantomData;
 
 /// An identifier for an object in the object store.
-pub struct ObjectId<T>(NonZeroU32, PhantomData<T>);
+pub struct ObjectId<T>(u32, PhantomData<T>);
+
+const TAG_BITS: usize = 8;
+const IDX_BITS: usize = 32 - TAG_BITS;
+const IDX_MASK: u32 = 0xffffffff >> TAG_BITS;
+const TAG_MASK: u32 = 0xffffffff << (32 - TAG_BITS);
+
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
+pub struct Tag(u8);
 
 impl<T> ObjectId<T> {
-    /// Get the id as a number.
-    pub fn as_num(self) -> u32 {
-        u32::from(self.0)
+    pub fn new(tag: Tag, idx: usize) -> ObjectId<T> {
+        let tag_part = (tag.0 as u32) << IDX_BITS;
+        let idx_part = idx as u32;
+        ObjectId(tag_part | idx_part, PhantomData)
     }
-}
 
-impl<T> From<NonZeroU32> for ObjectId<T> {
-    fn from(num: NonZeroU32) -> ObjectId<T> {
-        ObjectId(num, PhantomData)
+    pub fn num(self) -> u32 {
+        self.0
+    }
+
+    /// Get the id as a number.
+    pub fn idx(self) -> usize {
+        let idx: u32 = self.0 & IDX_MASK;
+        idx as usize
+    }
+
+    pub fn tag(self) -> Tag {
+        let tag = (self.0 & TAG_MASK) >> IDX_BITS;
+        Tag(tag as u8)
     }
 }
 
@@ -44,5 +62,11 @@ impl<T> std::fmt::Debug for ObjectId<T> {
             .field(&type_name)
             .field(&self.0)
             .finish()
+    }
+}
+
+impl Tag {
+    pub fn increment(self) -> Tag {
+        Tag(self.0.wrapping_add(1))
     }
 }

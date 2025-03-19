@@ -250,14 +250,3 @@ impl Objects {
             + self.boxes.sweep_color(self.reachable_color)
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn object_id_is_small() {
-        assert_eq!(std::mem::size_of::<ObjectId<()>>(), 4);
-        assert_eq!(std::mem::size_of::<Option<ObjectId<()>>>(), 4);
-    }
-}
