@@ -57,6 +57,8 @@ pub enum Val {
     Float(f64),
     /// Represents a symbol.
     Symbol(IdentifierId),
+    /// Represents a key.
+    Key(IdentifierId),
     /// Contains a string.
     String(ObjectId<CompactString>),
     /// Contains a short string.
@@ -89,6 +91,7 @@ pub enum DataType {
     Int,
     Float,
     Symbol,
+    Key,
     String,
     List,
     StructT,
@@ -186,6 +189,13 @@ impl Val {
         }
     }
 
+    pub fn as_key_id(self) -> Option<IdentifierId> {
+        match self {
+            Val::Key(x) => Some(x),
+            _ => None,
+        }
+    }
+
     /// Returns `true` if the value is a box.
     pub fn is_box(self) -> bool {
         matches!(self, Val::Box(_))
@@ -226,6 +236,7 @@ impl Val {
             | Val::Int(_)
             | Val::Float(_)
             | Val::Symbol(_)
+            | Val::Key(_)
             | Val::ShortString(_)
             | Val::DataType(_) => false,
         }
@@ -239,6 +250,7 @@ impl Val {
             Val::Int(_) => DataType::Int,
             Val::Float(_) => DataType::Float,
             Val::Symbol(_) => DataType::Symbol,
+            Val::Key(_) => DataType::Key,
             Val::String(_) => DataType::String,
             Val::ShortString(_) => DataType::String,
             Val::List(_) => DataType::List,
@@ -291,9 +303,13 @@ impl ValFormatter<'_> {
             Val::Bool(x) => write!(f, "{x}"),
             Val::Int(x) => write!(f, "{x}"),
             Val::Float(x) => write!(f, "{x}"),
-            Val::Symbol(symbol_id) => match self.vm.symbol_name(symbol_id) {
+            Val::Symbol(id) => match self.vm.symbol_name(id) {
                 Some(x) => write!(f, "'{x}"),
-                None => write!(f, "'(symbol-{})", symbol_id.as_num()),
+                None => write!(f, "'(symbol-{})", id.as_num()),
+            },
+            Val::Key(id) => match self.vm.symbol_name(id) {
+                Some(x) => write!(f, ":{x}"),
+                None => write!(f, ":key-{}", id.as_num()),
             },
             Val::ShortString(s) => write!(f, "{}", s.as_str()),
             Val::String(string_id) => match self.vm.objects.strings.get(string_id) {
@@ -366,6 +382,7 @@ impl ValFormatter<'_> {
                 DataType::Int => write!(f, "(type-int)"),
                 DataType::Float => write!(f, "(type-float)"),
                 DataType::Symbol => write!(f, "(type-symbol)"),
+                DataType::Key => write!(f, "(type-key)"),
                 DataType::String => write!(f, "(type-string)"),
                 DataType::List => write!(f, "(type-list)"),
                 DataType::StructT => write!(f, "(type-struct)"),

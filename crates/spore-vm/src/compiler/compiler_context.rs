@@ -135,7 +135,7 @@ impl<'a> CompilerContext<'a> {
                 return ResolvedVariable::Argument(idx);
             }
         }
-        let symbol_id = self.vm.make_symbol_id(identifier);
+        let symbol_id = self.vm.make_identifier_id(identifier);
         if self.capturable.contains(identifier) {
             ResolvedVariable::Captured(symbol_id)
         } else {
@@ -185,7 +185,7 @@ impl<'a> CompilerContext<'a> {
                 .make_identifier_id(builtins::INTERNAL_DEFINE_FUNCTION),
         ));
         dst.push(Instruction::Push(Val::Symbol(
-            self.vm.make_symbol_id(symbol),
+            self.vm.make_identifier_id(symbol),
         )));
         self.compile(dst, CompilerScope::Expression, expr)?;
         dst.push(Instruction::Eval(3));

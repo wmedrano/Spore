@@ -13,7 +13,7 @@ pub type VmResult<T> = Result<T, VmError>;
 /// Represents errors that can occur during VM execution.
 pub enum VmError {
     Compile(CompileError),
-    SymbolNotFound(IdentifierId),
+    IdentifierNotFound(IdentifierId),
     NotCallable(Val),
     WrongType {
         function_name: CompactString,
@@ -48,7 +48,7 @@ impl std::fmt::Display for VmError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             VmError::Compile(compile_error) => write!(f, "{compile_error}"),
-            VmError::SymbolNotFound(symbol_id) => {
+            VmError::IdentifierNotFound(symbol_id) => {
                 write!(f, "symbol {} not found", symbol_id.as_num())
             }
             VmError::NotCallable(val) => write!(f, "val {val:?} is not callable"),
@@ -119,7 +119,7 @@ impl std::fmt::Display for VmErrorWithContext<'_> {
             VmError::Compile(err) => {
                 write!(f, "{}", err.with_context(self.source))
             }
-            VmError::SymbolNotFound(symbol_id) => match self.vm.symbol_name(*symbol_id) {
+            VmError::IdentifierNotFound(symbol_id) => match self.vm.symbol_name(*symbol_id) {
                 Some(sym) => write!(f, "symbol {sym} not found"),
                 None => write!(f, "{}", self.err),
             },

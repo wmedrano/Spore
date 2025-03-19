@@ -199,14 +199,22 @@ impl<'a> IrBuilder<'a> {
         match leading_token {
             Some((span, ParsedText::Constant(_))) => Err(IrError::ConstantNotCallable(span)),
             Some((_, ParsedText::Identifier("define"))) => match children {
-                [_define, symbol @ Ast {
-                    node: AstNode::Leaf,
-                    ..
-                }, expr] => self.build_define(span, symbol, expr),
-                [_define, args_ast @ Ast {
-                    node: AstNode::Tree(children),
-                    ..
-                }, exprs @ ..] => match children.split_first() {
+                [
+                    _define,
+                    symbol @ Ast {
+                        node: AstNode::Leaf,
+                        ..
+                    },
+                    expr,
+                ] => self.build_define(span, symbol, expr),
+                [
+                    _define,
+                    args_ast @ Ast {
+                        node: AstNode::Tree(children),
+                        ..
+                    },
+                    exprs @ ..,
+                ] => match children.split_first() {
                     Some((name, args)) => self.build_define_function(span, name, args, exprs),
                     None => Err(IrError::BadDefine(args_ast.span)),
                 },
@@ -309,7 +317,7 @@ impl<'a> IrBuilder<'a> {
             ParsedText::Constant(_) => {
                 return Err(IrError::DefineExpectedIdentifierButFoundConstant(
                     symbol.span,
-                ))
+                ));
             }
             ParsedText::Identifier(symbol) => symbol,
         };
@@ -334,7 +342,7 @@ impl<'a> IrBuilder<'a> {
             .ok_or(IrError::DefineExpectedSymbol(name.span))?;
         let symbol_text = match ParsedText::new(symbol_text) {
             ParsedText::Constant(_) => {
-                return Err(IrError::DefineExpectedIdentifierButFoundConstant(name.span))
+                return Err(IrError::DefineExpectedIdentifierButFoundConstant(name.span));
             }
             ParsedText::Identifier(symbol) => symbol,
         };
@@ -432,12 +440,12 @@ mod tests {
     }
 
     #[test]
-    fn colon_produces_constant_symbol() {
+    fn colon_produces_constant_key() {
         let arena = Bump::new();
-        let source = ":symbol";
+        let source = ":key";
         let ast = Ast::with_source(source).unwrap();
         let ir = Ir::with_ast(source, ast.iter(), &arena).unwrap();
-        assert_eq!(ir, Ir::Constant(Constant::Symbol("symbol")));
+        assert_eq!(ir, Ir::Constant(Constant::Key("key")));
     }
 
     #[test]

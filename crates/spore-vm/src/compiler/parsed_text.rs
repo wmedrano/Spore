@@ -13,6 +13,8 @@ pub enum Constant<'a> {
     Int(i64),
     /// A floating-point constant.
     Float(f64),
+    /// A key constant.
+    Key(&'a str),
     /// A symbol constant.
     Symbol(&'a str),
     /// A string constant.
@@ -27,6 +29,7 @@ impl Constant<'_> {
             Constant::Int(x) => Val::Int(x),
             Constant::Float(x) => Val::Float(x),
             Constant::Symbol(x) => vm.make_symbol(x),
+            Constant::Key(x) => vm.make_key(x),
             Constant::String(x) => {
                 let mut ch_iter = x.chars();
                 let mut s = CompactString::default();
@@ -61,6 +64,7 @@ impl<'a> ParsedText<'a> {
             .or_else(|| Self::new_number(text))
             .or_else(|| Self::new_string(text))
             .or_else(|| Self::new_symbol(text))
+            .or_else(|| Self::new_key(text))
             .unwrap_or(ParsedText::Identifier(text))
     }
 
@@ -97,13 +101,13 @@ impl<'a> ParsedText<'a> {
     }
 
     fn new_symbol(text: &'a str) -> Option<Self> {
-        if let Some(stripped) = text.strip_prefix('\'') {
-            return Some(ParsedText::Constant(Constant::Symbol(stripped)));
-        }
-        if let Some(stripped) = text.strip_prefix(':') {
-            return Some(ParsedText::Constant(Constant::Symbol(stripped)));
-        }
-        None
+        text.strip_prefix('\'')
+            .map(|x| ParsedText::Constant(Constant::Symbol(x)))
+    }
+
+    fn new_key(text: &'a str) -> Option<Self> {
+        text.strip_prefix(':')
+            .map(|x| ParsedText::Constant(Constant::Key(x)))
     }
 
     #[cfg(test)]
@@ -192,12 +196,18 @@ mod tests {
                 .to_val(&mut vm),
             symbol_val
         );
+    }
+
+    #[test]
+    fn key_is_parsed() {
+        let mut vm = Vm::default();
+        let key_val = vm.make_key("key");
         assert_eq!(
-            ParsedText::new(":symbol")
+            ParsedText::new(":key")
                 .as_constant()
                 .unwrap()
                 .to_val(&mut vm),
-            symbol_val
+            key_val
         );
     }
 

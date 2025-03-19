@@ -230,6 +230,7 @@ impl Objects {
             | Val::Int(_)
             | Val::Float(_)
             | Val::Symbol(_)
+            | Val::Key(_)
             | Val::ShortString(_)
             | Val::DataType(_) => false,
         };

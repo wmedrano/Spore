@@ -4,7 +4,7 @@ mod math;
 mod strings;
 mod structs;
 
-/// The internal symbol used to define a new value.
+/// The internal identifier used to define a new value.
 pub const INTERNAL_DEFINE_FUNCTION: &str = "%define";
 
 use compact_str::format_compact;
@@ -37,14 +37,16 @@ pub fn register_builtins(vm: &mut Vm) {
     .apply_mut(structs::register);
 }
 
-/// Defines a symbol in the global scope.
-fn define_fn(vm: &mut Vm, sym: Val, val: Val) -> VmResult<Val> {
-    let sym = sym.as_symbol_id().ok_or_else(|| VmError::WrongType {
-        function_name: "define".into(),
-        expected: DataType::Symbol,
-        actual: sym.spore_type(),
-    })?;
-    vm.set_global(sym, val);
+/// Defines a value in the global scope.
+fn define_fn(vm: &mut Vm, identifier: Val, val: Val) -> VmResult<Val> {
+    let identifier_id = identifier
+        .as_symbol_id()
+        .ok_or_else(|| VmError::WrongType {
+            function_name: "define".into(),
+            expected: DataType::Symbol,
+            actual: identifier.spore_type(),
+        })?;
+    vm.set_global(identifier_id, val);
     Ok(Val::Void)
 }
 
@@ -86,6 +88,7 @@ fn equal_fn_impl(vm: &Vm, a: Val, b: Val) -> bool {
         (Val::Int(a), Val::Int(b)) => a == b,
         (Val::Float(a), Val::Float(b)) => a == b,
         (Val::Symbol(a), Val::Symbol(b)) => a == b,
+        (Val::Key(a), Val::Key(b)) => a == b,
         (Val::String(a), Val::String(b)) => {
             a == b || vm.objects.get_str(a) == vm.objects.get_str(b)
         }
@@ -147,12 +150,12 @@ fn not_fn(_: &mut Vm, a: Val) -> VmResult<Val> {
 
 /// Print the help.
 fn help_fn(vm: &mut Vm) -> VmResult<Val> {
-    let mut symbols: SporeList = vm.globals.values.keys().map(|k| Val::Symbol(*k)).collect();
-    symbols.sort_by_key(|k| {
+    let mut identifiers: SporeList = vm.globals.values.keys().map(|k| Val::Symbol(*k)).collect();
+    identifiers.sort_by_key(|k| {
         k.as_symbol_id()
             .map(|id| vm.objects.symbols.identifier(id).unwrap_or(""))
     });
-    let val = Val::List(vm.objects.register_list(symbols));
+    let val = Val::List(vm.objects.register_list(identifiers));
     Ok(val)
 }
 
@@ -247,6 +250,11 @@ mod tests {
         );
         assert_eq!(
             vm.clean_eval_str("(= 'a-symbol 'a-symbol)")
+                .map_err(VmError::from),
+            Ok(Val::Bool(true))
+        );
+        assert_eq!(
+            vm.clean_eval_str("(= :a-key :a-key)")
                 .map_err(VmError::from),
             Ok(Val::Bool(true))
         );
@@ -345,11 +353,11 @@ mod tests {
     fn eq_with_same_structs_returns_true() {
         let mut vm = Vm::default();
         assert_eq!(
-            vm.clean_eval_str("(= (struct 'a 1 'b 2) (struct 'b 2 'a 1))")
+            vm.clean_eval_str("(= (struct :a 1 :b 2) (struct :b 2 :a 1))")
                 .map_err(VmError::from),
             Ok(Val::Bool(true))
         );
-        vm.clean_eval_str("(define eq-struct (struct 'a 10 'b 20))")
+        vm.clean_eval_str("(define eq-struct (struct :a 10 :b 20))")
             .unwrap();
         assert_eq!(
             vm.clean_eval_str("(= eq-struct eq-struct)")
@@ -362,12 +370,12 @@ mod tests {
     fn eq_with_different_structs_returns_false() {
         let mut vm = Vm::default();
         assert_eq!(
-            vm.clean_eval_str("(= (struct 'a 1 'b 2) (struct 'c 1 'd 2))")
+            vm.clean_eval_str("(= (struct :a 1 :b 2) (struct :c 1 :d 2))")
                 .map_err(VmError::from),
             Ok(Val::Bool(false))
         );
         assert_eq!(
-            vm.clean_eval_str("(= (struct 'a 1) (struct 'a 2))")
+            vm.clean_eval_str("(= (struct :a 1) (struct :a 2))")
                 .map_err(VmError::from),
             Ok(Val::Bool(false))
         );

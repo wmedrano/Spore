@@ -1,8 +1,8 @@
 use crate::{
-    error::{VmError, VmResult},
-    val::{native_function::NativeFunction, DataType, Val},
-    vm::Vm,
     SporeStruct,
+    error::{VmError, VmResult},
+    val::{DataType, Val, native_function::NativeFunction},
+    vm::Vm,
 };
 
 pub fn register(vm: &mut Vm) {
@@ -18,13 +18,13 @@ fn struct_fn(vm: &mut Vm) -> VmResult<Val> {
         match pair {
             [key, value] => {
                 let key = match key {
-                    Val::Symbol(symbol_id) => symbol_id,
+                    Val::Key(key_id) => key_id,
                     _ => {
                         return Err(VmError::WrongType {
                             function_name: "struct".into(),
-                            expected: DataType::Symbol,
+                            expected: DataType::Key,
                             actual: key.spore_type(),
-                        })?
+                        })?;
                     }
                 };
                 strct.insert(*key, *value);
@@ -34,22 +34,22 @@ fn struct_fn(vm: &mut Vm) -> VmResult<Val> {
                     function_name: "struct".into(),
                     expected: args.len() as u32 + 1,
                     actual: args.len() as u32,
-                })?
+                })?;
             }
         }
     }
     Ok(vm.make_struct(strct))
 }
 
-fn struct_get_fn(vm: &mut Vm, strct: Val, sym: Val) -> VmResult<Val> {
-    let sym = match sym {
-        Val::Symbol(x) => x,
+fn struct_get_fn(vm: &mut Vm, strct: Val, key: Val) -> VmResult<Val> {
+    let k = match key {
+        Val::Key(x) => x,
         _ => {
             return Err(VmError::WrongType {
                 function_name: "struct-get".into(),
-                expected: DataType::Symbol,
-                actual: sym.spore_type(),
-            })?
+                expected: DataType::Key,
+                actual: key.spore_type(),
+            })?;
         }
     };
     let strct = strct.as_struct(vm).ok_or_else(|| VmError::WrongType {
@@ -58,24 +58,24 @@ fn struct_get_fn(vm: &mut Vm, strct: Val, sym: Val) -> VmResult<Val> {
         actual: strct.spore_type(),
     })?;
     let item = strct
-        .get(&sym)
+        .get(&k)
         .copied()
         .ok_or_else(|| VmError::Custom("key not found".into()))?;
     Ok(item)
 }
 
-fn struct_set_fn(vm: &mut Vm, strct: Val, sym: Val, val: Val) -> VmResult<Val> {
-    let sym = sym.as_symbol_id().ok_or(VmError::WrongType {
+fn struct_set_fn(vm: &mut Vm, strct: Val, key: Val, val: Val) -> VmResult<Val> {
+    let k = key.as_key_id().ok_or(VmError::WrongType {
         function_name: "".into(),
-        expected: DataType::Symbol,
-        actual: sym.spore_type(),
+        expected: DataType::Key,
+        actual: key.spore_type(),
     })?;
     let strct = strct.as_struct_mut(vm).ok_or(VmError::WrongType {
         function_name: "".into(),
         expected: DataType::StructT,
         actual: strct.spore_type(),
     })?;
-    strct.insert(sym, val);
+    strct.insert(k, val);
     Ok(Val::Void)
 }
 
@@ -98,59 +98,56 @@ mod tests {
     #[test]
     fn struct_with_args_returns_struct_with_elements() {
         let mut vm = Vm::default();
-        let val_sym1 = vm.make_symbol_id("test");
-        let val_sym2 = vm.make_symbol_id("test2");
+        let val_k1 = vm.make_identifier_id("k1");
+        let val_k2 = vm.make_identifier_id("k2");
         let got = vm
-            .clean_eval_str("(struct 'test 1 'test2 2)")
+            .clean_eval_str("(struct :k1 1 :k2 2)")
             .unwrap()
             .as_struct(&vm)
             .unwrap();
         assert_eq!(
             got,
-            &SporeStruct::from_iter([(val_sym1, Val::Int(1)), (val_sym2, Val::Int(2))].into_iter())
+            &SporeStruct::from_iter([(val_k1, Val::Int(1)), (val_k2, Val::Int(2))].into_iter())
         );
     }
 
     #[test]
     fn struct_get_returns_element_at_key() {
         let mut vm = Vm::default();
-        vm.clean_eval_str("(define s (struct 'test 1 'test2 2))")
+        vm.clean_eval_str("(define s (struct :test 1 :test2 2))")
             .unwrap();
-        let val_sym = vm.make_symbol("test");
         assert_eq!(
-            vm.clean_eval_str("struct-get s 'test")
+            vm.clean_eval_str("(struct-get s :test)")
                 .map_err(VmError::from),
-            Ok(val_sym)
+            Ok(Val::Int(1))
         );
     }
 
     #[test]
     fn struct_set_sets_element_at_key() {
         let mut vm = Vm::default();
-        let val_sym1 = vm.make_symbol_id("test");
-        let val_sym2 = vm.make_symbol_id("test2");
-        vm.clean_eval_str("(define s (struct 'test 1 'test2 2))")
+        let val_k1 = vm.make_identifier_id("k1");
+        let val_k2 = vm.make_identifier_id("k2");
+        vm.clean_eval_str("(define s (struct :k1 1 :k2 2))")
             .unwrap();
         assert_eq!(
-            vm.clean_eval_str("(struct-set! s 'test 10)")
+            vm.clean_eval_str("(struct-set! s :k1 10)")
                 .map_err(VmError::from),
             Ok(Val::Void)
         );
         assert_eq!(
             vm.clean_eval_str("s").unwrap().as_struct(&vm).unwrap(),
-            &SporeStruct::from_iter(
-                [(val_sym1, Val::Int(10)), (val_sym2, Val::Int(2))].into_iter()
-            )
+            &SporeStruct::from_iter([(val_k1, Val::Int(10)), (val_k2, Val::Int(2))].into_iter())
         );
     }
 
     #[test]
     fn struct_get_returns_error_if_key_not_found() {
         let mut vm = Vm::default();
-        vm.clean_eval_str("(define s (struct 'test 1 'test2 2))")
+        vm.clean_eval_str("(define s (struct :test 1 :test2 2))")
             .unwrap();
         assert_eq!(
-            vm.clean_eval_str("(struct-get s 'test3)")
+            vm.clean_eval_str("(struct-get s :test3)")
                 .map_err(VmError::from),
             Err(VmError::Custom("key not found".into()))
         );
@@ -159,10 +156,10 @@ mod tests {
     #[test]
     fn struct_set_returns_error_if_wrong_type() {
         let mut vm = Vm::default();
-        vm.clean_eval_str("(define s (struct 'test 1 'test2 2))")
+        vm.clean_eval_str("(define s (struct :test 1 :test2 2))")
             .unwrap();
         assert_eq!(
-            vm.clean_eval_str("(struct-set! 1 'test3 3)")
+            vm.clean_eval_str("(struct-set! 1 :test3 3)")
                 .map_err(VmError::from),
             Err(VmError::WrongType {
                 function_name: "".into(),
@@ -175,7 +172,7 @@ mod tests {
                 .map_err(VmError::from),
             Err(VmError::WrongType {
                 function_name: "".into(),
-                expected: DataType::Symbol,
+                expected: DataType::Key,
                 actual: DataType::Int,
             })
         );

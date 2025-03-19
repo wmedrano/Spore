@@ -98,7 +98,7 @@ impl Vm {
 
     /// Set a global value.
     pub fn set_global_by_name(&mut self, name: &str, value: Val) {
-        let symbol = self.make_symbol_id(name);
+        let symbol = self.make_identifier_id(name);
         self.globals.values.insert(symbol, value);
     }
 
@@ -132,19 +132,23 @@ impl Vm {
         self.objects.symbols.identifier(symbol_id)
     }
 
-    /// Make a new symbol and return it as a symbol id.
-    pub fn make_symbol_id(&mut self, name: &str) -> IdentifierId {
+    /// Make a new identifier and return its id.
+    pub fn make_identifier_id(&mut self, name: &str) -> IdentifierId {
         self.objects.symbols.make_identifier_id(name)
     }
 
-    /// Get the symbol id or return `None` if it does not exist.
-    pub fn symbol_id(&self, name: &str) -> Option<IdentifierId> {
+    /// Get the id of an identifier or return `None` if it does not exist.
+    pub fn identifier_id(&self, name: &str) -> Option<IdentifierId> {
         self.objects.symbols.identifier_id(name)
     }
 
-    /// Make a new symbol and return it as a `Val`.
+    /// Make a new identifier and return it as a `Val`.
     pub fn make_symbol(&mut self, name: &str) -> Val {
-        Val::Symbol(self.make_symbol_id(name))
+        Val::Symbol(self.make_identifier_id(name))
+    }
+
+    pub fn make_key(&mut self, k: &str) -> Val {
+        Val::Key(self.make_identifier_id(k))
     }
 
     /// Make a new string.
@@ -165,6 +169,7 @@ impl Vm {
         Val::List(lst)
     }
 
+    /// Make a new box containg value.
     pub fn make_box(&mut self, value: Val) -> Val {
         let b = self.objects.register_box(value);
         Val::Box(b)
@@ -291,7 +296,7 @@ impl Vm {
             Instruction::Deref(symbol) => {
                 let v = match self.globals.values.get(symbol) {
                     Some(v) => *v,
-                    None => return Err(VmError::SymbolNotFound(*symbol))?,
+                    None => return Err(VmError::IdentifierNotFound(*symbol))?,
                 };
                 self.stack.push(v);
             }

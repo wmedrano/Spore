@@ -70,13 +70,13 @@ pub struct Symbols {
 impl Symbols {
     fn new(vm: &mut Vm) -> Symbols {
         Symbols {
-            border: vm.make_symbol_id("border"),
-            title: vm.make_symbol_id("title"),
-            buffer: vm.make_symbol_id("buffer"),
-            cursor: vm.make_symbol_id("cursor"),
-            percent_exit_p: vm.make_symbol_id("%exit?"),
-            percent_windows: vm.make_symbol_id("%windows"),
-            text: vm.make_symbol_id("text"),
+            border: vm.make_identifier_id("border"),
+            title: vm.make_identifier_id("title"),
+            buffer: vm.make_identifier_id("buffer"),
+            cursor: vm.make_identifier_id("cursor"),
+            percent_exit_p: vm.make_identifier_id("%exit?"),
+            percent_windows: vm.make_identifier_id("%windows"),
+            text: vm.make_identifier_id("text"),
         }
     }
 }
