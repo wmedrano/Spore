@@ -1,59 +1,59 @@
-use super::{ast::AstError, ir::IrError};
+use super::{compiler_context::CompileError, sexp::ParseError};
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 /// Represents an error that can occur during compilation.
-pub enum CompileError {
-    Ast(AstError),
-    Ir(IrError),
+pub enum ParseOrCompileError {
+    Parse(ParseError),
+    Compile(CompileError),
     ModuleCompilationFoundUnexpectedLocalVariables,
 }
 
-impl From<IrError> for CompileError {
-    fn from(value: IrError) -> Self {
-        CompileError::Ir(value)
+impl From<CompileError> for ParseOrCompileError {
+    fn from(value: CompileError) -> Self {
+        ParseOrCompileError::Compile(value)
     }
 }
 
-impl From<AstError> for CompileError {
-    fn from(value: AstError) -> Self {
-        CompileError::Ast(value)
+impl From<ParseError> for ParseOrCompileError {
+    fn from(value: ParseError) -> Self {
+        ParseOrCompileError::Parse(value)
     }
 }
 
-impl std::error::Error for CompileError {}
+impl std::error::Error for ParseOrCompileError {}
 
-impl std::fmt::Display for CompileError {
+impl std::fmt::Display for ParseOrCompileError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            CompileError::Ast(e) => write!(f, "{e}"),
-            CompileError::Ir(e) => write!(f, "{e}"),
-            CompileError::ModuleCompilationFoundUnexpectedLocalVariables => {
+            ParseOrCompileError::Parse(e) => write!(f, "{e}"),
+            ParseOrCompileError::Compile(e) => write!(f, "{e}"),
+            ParseOrCompileError::ModuleCompilationFoundUnexpectedLocalVariables => {
                 write!(f, "module compilation found unexpected local variables")
             }
         }
     }
 }
 
-impl CompileError {
-    pub fn with_context(self, source: &str) -> CompileErrorWithContext<'_> {
-        CompileErrorWithContext { err: self, source }
+impl ParseOrCompileError {
+    pub fn with_context(self, source: &str) -> ParseOrCompileErrorWithContext<'_> {
+        ParseOrCompileErrorWithContext { err: self, source }
     }
 }
 
 #[derive(Debug, PartialEq)]
-pub struct CompileErrorWithContext<'a> {
-    err: CompileError,
+pub struct ParseOrCompileErrorWithContext<'a> {
+    err: ParseOrCompileError,
     source: &'a str,
 }
 
-impl std::error::Error for CompileErrorWithContext<'_> {}
+impl std::error::Error for ParseOrCompileErrorWithContext<'_> {}
 
-impl std::fmt::Display for CompileErrorWithContext<'_> {
+impl std::fmt::Display for ParseOrCompileErrorWithContext<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.err {
-            CompileError::Ast(e) => write!(f, "{}", e.with_context(self.source)),
-            CompileError::Ir(e) => write!(f, "{}", e.with_context(self.source)),
-            CompileError::ModuleCompilationFoundUnexpectedLocalVariables => {
+            ParseOrCompileError::Parse(e) => write!(f, "{}", e.with_context(self.source)),
+            ParseOrCompileError::Compile(e) => write!(f, "{}", e.with_context(self.source)),
+            ParseOrCompileError::ModuleCompilationFoundUnexpectedLocalVariables => {
                 write!(f, "module compilation found unexpected local variables")
             }
         }

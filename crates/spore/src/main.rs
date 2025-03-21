@@ -42,6 +42,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with(rope::register_rope)
         .with(shell::register_shell)
         .with(files::register_files);
+    vm.clean_eval_str(include_str!("../lisp/buffer.lisp"))
+        .unwrap();
+    vm.clean_eval_str(include_str!("../lisp/window.lisp"))
+        .unwrap();
     match args.mode {
         Mode::Editor => {
             let terminal = ratatui::init();
@@ -84,10 +88,6 @@ impl Symbols {
 fn run(vm: &mut Vm, mut terminal: DefaultTerminal) -> Result<Stats, Box<dyn std::error::Error>> {
     let symbols = Symbols::new(vm);
     let mut stats = Stats::default();
-    vm.clean_eval_str(include_str!("../lisp/buffer.lisp"))
-        .unwrap();
-    vm.clean_eval_str(include_str!("../lisp/window.lisp"))
-        .unwrap();
     vm.clean_eval_str(include_str!("../lisp/main.lisp"))
         .unwrap();
     while !vm

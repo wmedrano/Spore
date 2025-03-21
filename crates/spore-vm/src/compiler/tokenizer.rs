@@ -20,6 +20,8 @@ pub enum TokenType {
     CloseParen,
     /// An identifier.
     Identifier,
+    /// A string.
+    String,
     /// A comment.
     Comment,
 }
@@ -31,39 +33,52 @@ impl Token {
     }
 }
 
-/// Tokenizes a string of source code.
-pub fn tokenize(source: &str) -> impl '_ + Iterator<Item = Token> {
-    let mut source_iter = source.char_indices().peekable();
-    std::iter::from_fn(move || loop {
-        let (idx, ch) = source_iter.peek().cloned()?;
-        match ch {
-            ch if ch.is_whitespace() => {
-                source_iter.next();
+pub struct Tokenizer<'a> {
+    source_iter: Peekable<CharIndices<'a>>,
+}
+
+impl<'a> Tokenizer<'a> {
+    pub fn new(source: &'a str) -> Tokenizer<'a> {
+        let source_iter = source.char_indices().peekable();
+        Tokenizer { source_iter }
+    }
+}
+
+impl<'a> Iterator for Tokenizer<'a> {
+    type Item = Token;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            let (idx, ch) = self.source_iter.peek().cloned()?;
+            match ch {
+                ch if ch.is_whitespace() => {
+                    self.source_iter.next();
+                }
+                '(' | ')' => {
+                    self.source_iter.next();
+                    let span = Span {
+                        start: idx as u32,
+                        end: idx as u32 + 1,
+                    };
+                    return Some(Token {
+                        span,
+                        token_type: if ch == '(' {
+                            TokenType::OpenParen
+                        } else {
+                            TokenType::CloseParen
+                        },
+                    });
+                }
+                '"' => {
+                    return Some(parse_string(idx as u32, &mut self.source_iter));
+                }
+                ';' => {
+                    return Some(parse_comment(idx as u32, &mut self.source_iter));
+                }
+                _ => return Some(parse_token(idx as u32, &mut self.source_iter)),
             }
-            '(' | ')' => {
-                source_iter.next();
-                let span = Span {
-                    start: idx as u32,
-                    end: idx as u32 + 1,
-                };
-                return Some(Token {
-                    span,
-                    token_type: if ch == '(' {
-                        TokenType::OpenParen
-                    } else {
-                        TokenType::CloseParen
-                    },
-                });
-            }
-            '"' => {
-                return Some(parse_string(idx as u32, &mut source_iter));
-            }
-            ';' => {
-                return Some(parse_comment(idx as u32, &mut source_iter));
-            }
-            _ => return Some(parse_token(idx as u32, &mut source_iter)),
         }
-    })
+    }
 }
 
 /// Parses a string token from the source code.
@@ -78,7 +93,7 @@ fn parse_string(start: u32, source_iter: &mut Peekable<CharIndices>) -> Token {
                 };
                 return Token {
                     span,
-                    token_type: TokenType::Identifier,
+                    token_type: TokenType::String,
                 };
             }
             Some(x) => x,
@@ -92,7 +107,7 @@ fn parse_string(start: u32, source_iter: &mut Peekable<CharIndices>) -> Token {
                     start,
                     end: end + 1,
                 },
-                token_type: TokenType::Identifier,
+                token_type: TokenType::String,
             };
         }
     }
@@ -122,13 +137,13 @@ fn parse_token(start: u32, source_iter: &mut Peekable<CharIndices>) -> Token {
                 return Token {
                     span,
                     token_type: TokenType::Identifier,
-                }
+                };
             }
             '(' | ')' => {
                 return Token {
                     span,
                     token_type: TokenType::Identifier,
-                }
+                };
             }
             _ => {
                 source_iter.next();
@@ -174,7 +189,9 @@ mod tests {
     use super::*;
 
     fn tokenize_to_vec(source: &str) -> Vec<(&str, Token)> {
-        tokenize(source).map(|t| (t.text(source), t)).collect()
+        Tokenizer::new(source)
+            .map(|t| (t.text(source), t))
+            .collect()
     }
 
     #[test]
@@ -202,14 +219,14 @@ mod tests {
                     "\"hello\"",
                     Token {
                         span: Span { start: 0, end: 7 },
-                        token_type: TokenType::Identifier
+                        token_type: TokenType::String
                     }
                 ),
                 (
                     "\"world\"",
                     Token {
                         span: Span { start: 8, end: 15 },
-                        token_type: TokenType::Identifier
+                        token_type: TokenType::String
                     }
                 )
             ]
@@ -229,7 +246,7 @@ string"
                 "\"multi line\nstring\"",
                 Token {
                     span: Span { start: 1, end: 20 },
-                    token_type: TokenType::Identifier
+                    token_type: TokenType::String
                 }
             ),]
         );

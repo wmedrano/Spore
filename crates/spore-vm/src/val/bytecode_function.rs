@@ -1,12 +1,6 @@
-use bumpalo::Bump;
 use compact_str::CompactString;
 
-use crate::{
-    compiler::{ast::Ast, error::CompileError},
-    instruction::Instruction,
-    vm::Vm,
-    SporeRc,
-};
+use crate::{SporeRc, compiler::error::ParseOrCompileError, instruction::Instruction, vm::Vm};
 
 use super::Val;
 
@@ -26,7 +20,7 @@ pub struct ByteCodeFunction {
 }
 
 impl ByteCodeFunction {
-    /// Creates a new bytecode function from an Ast.
+    /// Creates a new bytecode function from an expression.
     ///
     /// It is assumed that the bytecode is a module definition. This implies:
     ///
@@ -35,10 +29,8 @@ impl ByteCodeFunction {
     pub fn with_module_source<'a>(
         vm: &mut Vm,
         s: &'a str,
-        ast: impl Iterator<Item = &'a Ast>,
-        arena: &'a Bump,
-    ) -> Result<ByteCodeFunction, CompileError> {
-        let instructions = crate::compiler::compile_module(vm, s, ast, arena)?;
+    ) -> Result<ByteCodeFunction, ParseOrCompileError> {
+        let instructions = crate::compiler::compile_module(vm, s)?;
         Ok(ByteCodeFunction {
             name: None,
             instructions,

@@ -273,7 +273,7 @@ pub struct ValFormatter<'a> {
 impl std::fmt::Debug for ValFormatter<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.val {
-            Val::Symbol(symbol_id) => match self.vm.symbol_name(symbol_id) {
+            Val::Symbol(symbol_id) => match self.vm.identifier_name(symbol_id) {
                 Some(symbol_name) => f.debug_tuple("Symbol").field(&symbol_name).finish(),
                 None => f
                     .debug_tuple("Symbol")
@@ -303,11 +303,11 @@ impl ValFormatter<'_> {
             Val::Bool(x) => write!(f, "{x}"),
             Val::Int(x) => write!(f, "{x}"),
             Val::Float(x) => write!(f, "{x}"),
-            Val::Symbol(id) => match self.vm.symbol_name(id) {
+            Val::Symbol(id) => match self.vm.identifier_name(id) {
                 Some(x) => write!(f, "'{x}"),
                 None => write!(f, "'(symbol-{})", id.as_num()),
             },
-            Val::Key(id) => match self.vm.symbol_name(id) {
+            Val::Key(id) => match self.vm.identifier_name(id) {
                 Some(x) => write!(f, ":{x}"),
                 None => write!(f, ":key-{}", id.as_num()),
             },

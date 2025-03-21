@@ -1,14 +1,11 @@
-use ast::Ast;
-use bumpalo::Bump;
-use error::CompileError;
+use error::ParseOrCompileError;
+use sexp::SexpBuilder;
 
-use crate::{instruction::Instruction, vm::Vm, SporeRc};
+use crate::{SporeRc, instruction::Instruction, vm::Vm};
 
-pub mod ast;
 mod compiler_context;
 pub mod error;
-mod ir;
-mod parsed_text;
+pub mod sexp;
 pub mod span;
 pub mod tokenizer;
 
@@ -16,17 +13,20 @@ pub mod tokenizer;
 pub fn compile_module<'a>(
     vm: &mut Vm,
     source: &'a str,
-    asts: impl Iterator<Item = &'a Ast>,
-    arena: &'a Bump,
-) -> Result<SporeRc<[Instruction]>, CompileError> {
+) -> Result<SporeRc<[Instruction]>, ParseOrCompileError> {
+    let mut sexp_builder = SexpBuilder::new(source);
+    let mut sexps = Vec::new();
+    while let Some(sexp) = sexp_builder.next(vm) {
+        let sexp = sexp?;
+        sexps.push(sexp);
+    }
     let mut compiler = compiler_context::CompilerContext::new(vm);
-    let ir = ir::Ir::with_ast(source, asts, arena)?;
-    let instructions = compiler.compile_to_instructions(
+    let instructions = compiler.compile_sexp_to_instructions(
         compiler_context::CompilerScope::Module,
-        std::iter::once(&ir),
+        sexps.iter().copied(),
     )?;
     if !compiler.locals.is_empty() {
-        return Err(CompileError::ModuleCompilationFoundUnexpectedLocalVariables);
+        return Err(ParseOrCompileError::ModuleCompilationFoundUnexpectedLocalVariables);
     }
     let instructions: SporeRc<[Instruction]> = instructions.into();
     Ok(instructions)

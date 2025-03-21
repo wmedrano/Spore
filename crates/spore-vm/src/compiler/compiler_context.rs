@@ -9,16 +9,101 @@ use crate::{
     vm::Vm,
 };
 
-use super::{
-    ir::{Ir, IrError},
-    span::Span,
-};
+use super::span::Span;
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+/// Represents an error that can occur during IR building.
+pub enum CompileError {
+    EmptyFunctionCall(Span),
+    ConstantNotCallable(Span),
+    BadDefine(Span),
+    BadWhen(Span),
+    BadLambda(Span),
+    BadIf(Span),
+    BadReturn(Span),
+}
+
+impl std::error::Error for CompileError {}
+
+impl std::fmt::Display for CompileError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CompileError::EmptyFunctionCall(span) => write!(f, "empty function call at {span}"),
+            CompileError::ConstantNotCallable(span) => write!(f, "constant not callable at {span}"),
+            CompileError::BadDefine(span) => write!(f, "bad define at {span}"),
+            CompileError::BadWhen(span) => write!(f, "bad when at {span}"),
+            CompileError::BadLambda(span) => write!(f, "bad lambda at {span}"),
+            CompileError::BadIf(span) => write!(f, "bad if at {span}"),
+            CompileError::BadReturn(span) => write!(f, "bad return at {span}"),
+        }
+    }
+}
+
+impl CompileError {
+    pub fn with_context(self, source: &str) -> CompileErrorWithContext<'_> {
+        CompileErrorWithContext { err: self, source }
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub struct CompileErrorWithContext<'a> {
+    err: CompileError,
+    source: &'a str,
+}
+
+impl std::error::Error for CompileErrorWithContext<'_> {}
+
+impl std::fmt::Display for CompileErrorWithContext<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.err {
+            CompileError::EmptyFunctionCall(span) => write!(
+                f,
+                "empty function call at {span}: {text}",
+                text = span.text(self.source)
+            ),
+            CompileError::ConstantNotCallable(span) => {
+                write!(
+                    f,
+                    "constant not callable at {span}: {text}, text=span.text(self.source)",
+                    text = span.text(self.source),
+                )
+            }
+            CompileError::BadDefine(span) => write!(
+                f,
+                "bad define at {span}: {text}",
+                text = span.text(self.source)
+            ),
+            CompileError::BadLambda(span) => write!(
+                f,
+                "bad lambda at {span}: {text}",
+                text = span.text(self.source)
+            ),
+            CompileError::BadIf(span) => {
+                write!(f, "bad if at {span}: {text}", text = span.text(self.source))
+            }
+            CompileError::BadWhen(span) => {
+                write!(
+                    f,
+                    "bad when at {span}: {text}",
+                    text = span.text(self.source)
+                )
+            }
+            CompileError::BadReturn(span) => {
+                write!(
+                    f,
+                    "bad return at {span}: {text}",
+                    text = span.text(self.source)
+                )
+            }
+        }
+    }
+}
 
 pub struct CompilerContext<'a> {
     pub vm: &'a mut Vm,
-    pub args: &'a [&'a str],
-    pub locals: Vec<&'a str>,
-    pub capturable: HashSet<&'a str>,
+    pub args: Vec<CompactString>,
+    pub locals: Vec<CompactString>,
+    pub capturable: HashSet<CompactString>,
     pub captures: Vec<Capture>,
 }
 
@@ -52,7 +137,7 @@ impl<'a> CompilerContext<'a> {
     pub fn new(vm: &'a mut Vm) -> CompilerContext<'a> {
         CompilerContext {
             vm,
-            args: &[],
+            args: Vec::new(),
             locals: Vec::new(),
             capturable: HashSet::new(),
             captures: Vec::new(),
@@ -62,8 +147,8 @@ impl<'a> CompilerContext<'a> {
     /// Create a new compiler with arguments and a set of capturable variables.
     pub fn with_args(
         vm: &'a mut Vm,
-        args: &'a [&str],
-        capturable: HashSet<&'a str>,
+        args: Vec<CompactString>,
+        capturable: HashSet<CompactString>,
     ) -> CompilerContext<'a> {
         CompilerContext {
             vm,
@@ -74,51 +159,166 @@ impl<'a> CompilerContext<'a> {
         }
     }
 
-    pub fn compile_to_instructions(
+    pub fn compile_sexp_to_instructions(
         &mut self,
         context: CompilerScope,
-        irs: impl Iterator<Item = &'a Ir<'a>>,
-    ) -> Result<Vec<Instruction>, IrError> {
+        sexps: impl Iterator<Item = Val>,
+    ) -> Result<Vec<Instruction>, CompileError> {
         let mut dst = Vec::new();
-        for expr in irs {
-            self.compile(&mut dst, context, expr)?;
+        for sexp in sexps {
+            self.compile_sexp(&mut dst, context, sexp)?;
         }
         Ok(dst)
     }
 
-    /// Compiles an IR into bytecode instructions.
-    pub fn compile(
+    pub fn compile_sexp(
         &mut self,
         dst: &mut Vec<Instruction>,
         context: CompilerScope,
-        ir: &'a Ir,
-    ) -> Result<(), IrError> {
-        match ir {
-            Ir::Constant(constant) => {
-                dst.push(Instruction::Push(constant.to_val(self.vm)));
+        sexp: Val,
+    ) -> Result<(), CompileError> {
+        match sexp {
+            Val::Void
+            | Val::Bool(_)
+            | Val::Int(_)
+            | Val::Float(_)
+            | Val::Key(_)
+            | Val::String(_)
+            | Val::ShortString(_)
+            | Val::Struct(_)
+            | Val::NativeFunction(_)
+            | Val::BytecodeFunction { .. }
+            | Val::Custom(_)
+            | Val::Box(_)
+            | Val::DataType(_) => dst.push(Instruction::Push(sexp)),
+            Val::Symbol(identifier_id) => {
+                match self.vm.identifier_name(identifier_id) {
+                    None => dst.push(Instruction::Push(sexp)),
+                    // TODO: Consider situation where ident is a
+                    // series of apostraphes.
+                    Some(ident) if ident.starts_with('\'') => {
+                        let unquoted_ident = CompactString::new(&ident[1..]);
+                        let symbol = self.vm.make_symbol(&unquoted_ident);
+                        dst.push(Instruction::Push(symbol));
+                    }
+                    Some(ident) => {
+                        let ident = CompactString::new(ident);
+                        self.compile_deref(dst, &ident);
+                    }
+                }
             }
-            Ir::Deref(ident) => self.compile_deref(dst, ident),
-            Ir::FunctionCall { function, args } => {
-                self.compile_function_call(dst, function, args)?;
+            Val::List(list_id) => {
+                let items = self.vm.objects.get_list(list_id).unwrap().clone();
+                self.compile_sexp_list(dst, context, items)?;
             }
-            Ir::Define { span, symbol, expr } => match context {
-                CompilerScope::Module => self.compile_global_define(dst, symbol, expr)?,
-                CompilerScope::Lambda => self.compile_local_define(dst, symbol, expr)?,
-                CompilerScope::Expression => return Err(IrError::BadDefine(*span)),
-            },
-            Ir::Lambda { name, args, exprs } => {
-                self.compile_lambda(dst, *name, args, exprs)?;
+        };
+        Ok(())
+    }
+
+    // TODO: Get rid of all "maybe_fix" functions for readability.
+    fn maybe_fix_define(&mut self, expr: Vec<Val>) -> Vec<Val> {
+        match expr.as_slice() {
+            [
+                Val::Symbol(define_identifier),
+                Val::List(args_id),
+                body @ ..,
+            ] => {
+                let define_identifier = self.vm.identifier_name(*define_identifier);
+                let args = self.vm.objects.get_list(*args_id);
+                match (define_identifier, args) {
+                    (Some("define"), Some(args)) => {
+                        if body.is_empty() {
+                            return expr;
+                        }
+                        let args = args.clone();
+                        let mut lambda_expr = Vec::new();
+                        lambda_expr.push(self.vm.make_symbol("lambda"));
+                        lambda_expr.push(self.vm.make_list(args[1..].to_vec()));
+                        lambda_expr.extend_from_slice(body);
+                        Vec::from_iter([expr[0], args[0], self.vm.make_list(lambda_expr)])
+                    }
+                    _ => expr,
+                }
             }
-            Ir::If {
-                pred,
-                true_branch,
-                false_branch,
-            } => {
-                self.compile_if(dst, pred, true_branch, false_branch)?;
+            _ => expr,
+        }
+    }
+
+    // TODO: Get rid of all "maybe_fix" functions for readability.
+    fn maybe_fix_when(&mut self, expr: Vec<Val>) -> Vec<Val> {
+        match expr.as_slice() {
+            [Val::Symbol(define_identifier), pred, body @ ..] => {
+                let when_identifier = self.vm.identifier_name(*define_identifier);
+                match when_identifier {
+                    Some("when") => {
+                        let if_symbol = self.vm.make_symbol("if");
+                        let do_symbol = self.vm.make_symbol("do");
+                        let body =
+                            Vec::from_iter(std::iter::once(do_symbol).chain(body.iter().copied()));
+                        vec![if_symbol, *pred, self.vm.make_list(body)]
+                    }
+                    _ => expr,
+                }
             }
-            Ir::MultiExpr { exprs } => self.compile_multi_expr(dst, context, exprs)?,
-            Ir::Return { span, exprs } => {
-                self.compile_return(dst, context, *span, exprs)?;
+            _ => expr,
+        }
+    }
+
+    pub fn compile_sexp_list(
+        &mut self,
+        dst: &mut Vec<Instruction>,
+        context: CompilerScope,
+        sexp: Vec<Val>,
+    ) -> Result<(), CompileError> {
+        let leading_val = match sexp.first() {
+            Some(v) => *v,
+            None => return Err(CompileError::EmptyFunctionCall(Span::default())),
+        };
+        let leading_ident = match leading_val {
+            Val::Symbol(identifier_id) => self.vm.identifier_name(identifier_id).unwrap(),
+            _ => return Err(CompileError::ConstantNotCallable(Span::default())),
+        };
+        match leading_ident {
+            "define" => {
+                let sexp = self.maybe_fix_define(sexp);
+                let (symbol, expr) = match sexp.as_slice() {
+                    [_, symbol, expr] => (*symbol, *expr),
+                    _ => return Err(CompileError::BadDefine(Span::default())),
+                };
+                match context {
+                    CompilerScope::Module => self.compile_global_define_sexp(dst, symbol, expr)?,
+                    CompilerScope::Lambda => self.compile_local_define_sexp(dst, symbol, expr)?,
+                    CompilerScope::Expression => {
+                        return Err(CompileError::BadDefine(Span::default()));
+                    }
+                }
+            }
+            "lambda" => {
+                let (args, exprs) = match sexp.as_slice() {
+                    [_, args, exprs @ ..] => {
+                        if exprs.is_empty() {
+                            return Err(CompileError::BadLambda(Span::default()));
+                        }
+                        (*args, exprs)
+                    }
+                    _ => return Err(CompileError::BadLambda(Span::default())),
+                };
+                self.compile_lambda_sexp(dst, None, args, exprs)?;
+            }
+            "if" | "when" => {
+                let sexp = self.maybe_fix_when(sexp);
+                let (pred, true_branch, false_branch) = match sexp.as_slice() {
+                    [_, pred, true_branch] => (*pred, *true_branch, Val::Void),
+                    [_, pred, true_branch, false_branch] => (*pred, *true_branch, *false_branch),
+                    _ => {
+                        return Err(CompileError::BadIf(Span::default()));
+                    }
+                };
+                self.compile_if_sexp(dst, pred, true_branch, false_branch)?;
+            }
+            "return" => self.compile_return_sexp(dst, context, &sexp[1..])?,
+            _ => {
+                self.compile_function_call_sexp(dst, leading_val, &sexp[1..])?;
             }
         };
         Ok(())
@@ -158,72 +358,80 @@ impl<'a> CompilerContext<'a> {
         dst.push(instruction);
     }
 
-    fn compile_function_call(
+    fn compile_function_call_sexp(
         &mut self,
         dst: &mut Vec<Instruction>,
-        function: &'a Ir,
-        args: &'a [Ir],
-    ) -> Result<(), IrError> {
-        self.compile(dst, CompilerScope::Expression, function)?;
+        function: Val,
+        args: &[Val],
+    ) -> Result<(), CompileError> {
+        self.compile_sexp(dst, CompilerScope::Expression, function)?;
         for arg in args.iter() {
-            self.compile(dst, CompilerScope::Expression, arg)?;
+            self.compile_sexp(dst, CompilerScope::Expression, *arg)?;
         }
         dst.push(Instruction::Eval(1 + args.len()));
         Ok(())
     }
 
-    fn compile_global_define(
+    fn compile_global_define_sexp(
         &mut self,
         dst: &mut Vec<Instruction>,
-        symbol: &str,
-        expr: &'a Ir,
-    ) -> Result<(), IrError> {
+        symbol: Val,
+        expr: Val,
+    ) -> Result<(), CompileError> {
         dst.push(Instruction::Deref(
             self.vm
                 .objects
                 .symbols
                 .make_identifier_id(builtins::INTERNAL_DEFINE_FUNCTION),
         ));
-        dst.push(Instruction::Push(Val::Symbol(
-            self.vm.make_identifier_id(symbol),
-        )));
-        self.compile(dst, CompilerScope::Expression, expr)?;
+        match symbol {
+            Val::Symbol(_) => {}
+            _ => return Err(CompileError::BadDefine(Span::default())),
+        };
+        dst.push(Instruction::Push(symbol));
+        self.compile_sexp(dst, CompilerScope::Expression, expr)?;
         dst.push(Instruction::Eval(3));
         Ok(())
     }
 
-    fn compile_local_define(
+    fn compile_local_define_sexp(
         &mut self,
         dst: &mut Vec<Instruction>,
-        symbol: &'a str,
-        expr: &'a Ir,
-    ) -> Result<(), IrError> {
+        symbol: Val,
+        expr: Val,
+    ) -> Result<(), CompileError> {
         let idx = self.locals.len() + self.args.len();
-        self.compile(dst, CompilerScope::Expression, expr)?;
+        self.compile_sexp(dst, CompilerScope::Expression, expr)?;
         dst.push(Instruction::Set(idx));
-        self.locals.push(symbol);
+        match symbol {
+            Val::Symbol(identifier_id) => {
+                let identifier = self.vm.identifier_name(identifier_id).unwrap();
+                self.locals.push(CompactString::new(identifier));
+            }
+            _ => return Err(CompileError::BadDefine(Span::default())),
+        };
         Ok(())
     }
 
-    fn compile_if(
+    fn compile_if_sexp(
         &mut self,
         dst: &mut Vec<Instruction>,
-        pred: &'a Ir,
-        true_branch: &'a Ir,
-        false_branch: &'a Ir,
-    ) -> Result<(), IrError> {
-        self.compile(dst, CompilerScope::Expression, pred)?;
+        pred: Val,
+        true_branch: Val,
+        false_branch: Val,
+    ) -> Result<(), CompileError> {
+        self.compile_sexp(dst, CompilerScope::Expression, pred)?;
         let condition_jump = dst.len();
         dst.push(Instruction::JumpIf(0));
 
         let false_start = dst.len();
-        self.compile(dst, CompilerScope::Expression, false_branch)?;
+        self.compile_sexp(dst, CompilerScope::Expression, false_branch)?;
         let jump = dst.len();
         dst.push(Instruction::Jump(0));
         let false_end = dst.len();
 
         let true_start = dst.len();
-        self.compile(dst, CompilerScope::Expression, true_branch)?;
+        self.compile_sexp(dst, CompilerScope::Expression, true_branch)?;
         let true_end = dst.len();
 
         dst[condition_jump] = Instruction::JumpIf(false_end - false_start);
@@ -231,36 +439,17 @@ impl<'a> CompilerContext<'a> {
         Ok(())
     }
 
-    fn compile_multi_expr(
+    fn compile_return_sexp(
         &mut self,
         dst: &mut Vec<Instruction>,
         context: CompilerScope,
-        exprs: &'a [Ir],
-    ) -> Result<(), IrError> {
-        for expr in exprs.iter() {
-            self.compile(dst, context, expr)?;
-        }
-        if exprs.is_empty() {
-            dst.push(Instruction::Push(Val::Void));
-        }
-        if exprs.len() > 1 {
-            dst.push(Instruction::Compact(exprs.len()));
-        }
-        Ok(())
-    }
-
-    fn compile_return(
-        &mut self,
-        dst: &mut Vec<Instruction>,
-        context: CompilerScope,
-        span: Span,
-        exprs: &'a [Ir],
-    ) -> Result<(), IrError> {
+        exprs: &[Val],
+    ) -> Result<(), CompileError> {
         if context == CompilerScope::Module {
-            return Err(IrError::BadReturn(span));
+            return Err(CompileError::BadReturn(Span::default()));
         }
         for expr in exprs.iter() {
-            self.compile(dst, CompilerScope::Expression, expr)?;
+            self.compile_sexp(dst, CompilerScope::Expression, *expr)?;
         }
         if exprs.is_empty() {
             dst.push(Instruction::Push(Val::Void));
@@ -269,33 +458,48 @@ impl<'a> CompilerContext<'a> {
         Ok(())
     }
 
-    fn compile_lambda(
+    fn compile_lambda_sexp(
         &mut self,
         dst: &mut Vec<Instruction>,
         name: Option<&str>,
-        args: &[&str],
-        exprs: &[Ir],
-    ) -> Result<(), IrError> {
-        let mut compiler = CompilerContext::with_args(
-            self.vm,
-            args,
-            HashSet::from_iter(
-                self.capturable
-                    .iter()
-                    .copied()
-                    .chain(self.locals.iter().copied())
-                    .chain(self.args.iter().copied()),
-            ),
+        args: Val,
+        exprs: &[Val],
+    ) -> Result<(), CompileError> {
+        let args = match args {
+            Val::List(list_id) => {
+                let list = self.vm.objects.get_list(list_id).unwrap();
+                let mut args = Vec::with_capacity(list.len());
+                for v in list.iter().copied() {
+                    match v {
+                        Val::Symbol(identifier_id) => {
+                            let identifier = self.vm.identifier_name(identifier_id).unwrap();
+                            args.push(CompactString::new(identifier));
+                        }
+                        _ => return Err(CompileError::BadLambda(Span::default())),
+                    }
+                }
+                args
+            }
+            _ => return Err(CompileError::BadLambda(Span::default())),
+        };
+        let arg_count = args.len();
+        let capturable = HashSet::from_iter(
+            self.capturable
+                .iter()
+                .cloned()
+                .chain(self.locals.iter().cloned())
+                .chain(self.args.iter().cloned()),
         );
+        let mut compiler = CompilerContext::with_args(self.vm, args, capturable);
         let mut lambda_instructions =
-            compiler.compile_to_instructions(CompilerScope::Lambda, exprs.iter())?;
+            compiler.compile_sexp_to_instructions(CompilerScope::Lambda, exprs.iter().copied())?;
         let capture_to_idx = compiler.capture_to_idx();
         compiler.fix_captures(&mut lambda_instructions, &capture_to_idx);
         let locals = compiler.locals.len() as u32;
         let lambda_id = self.vm.objects.register_bytecode(ByteCodeFunction {
             name: name.map(CompactString::new),
             instructions: lambda_instructions.into(),
-            args: args.len() as u32,
+            args: arg_count as u32,
             locals,
             captures: capture_to_idx.len() as u32,
         });

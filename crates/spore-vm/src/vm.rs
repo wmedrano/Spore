@@ -1,10 +1,8 @@
-use bumpalo::Bump;
 use compact_str::CompactString;
 
 use crate::{
     SporeCustomType, SporeList, SporeRc, SporeStruct,
     builtins::register_builtins,
-    compiler::ast::Ast,
     error::{VmError, VmErrorWithContext, VmResult},
     gc::{ObjectId, Objects},
     instruction::Instruction,
@@ -128,7 +126,7 @@ impl Vm {
     /// Given a `SymbolId`, this function attempts to retrieve the corresponding name
     /// from the symbol table. It returns `Some(&str)` if the symbol is found, and `None`
     /// otherwise.
-    pub fn symbol_name(&self, symbol_id: IdentifierId) -> Option<&str> {
+    pub fn identifier_name(&self, symbol_id: IdentifierId) -> Option<&str> {
         self.objects.symbols.identifier(symbol_id)
     }
 
@@ -201,38 +199,7 @@ impl Vm {
     pub fn clean_eval_str<'a>(&'a mut self, s: &'a str) -> Result<Val, VmErrorWithContext<'a>> {
         let mut inner = || -> VmResult<Val> {
             self.stack.clear();
-            let asts = Ast::with_source(s)?;
-            let bytecode =
-                ByteCodeFunction::with_module_source(self, s, asts.iter(), &Bump::new())?;
-            let bytecode_id = self.objects.register_bytecode(bytecode);
-            self.eval_function(
-                Val::BytecodeFunction {
-                    id: bytecode_id,
-                    captures: None,
-                },
-                &[],
-            )
-        };
-        match inner() {
-            Ok(val) => Ok(val),
-            Err(err) => Err(err.with_context(self, s)),
-        }
-    }
-
-    /// Evaluates the AST of Spore code.
-    ///
-    /// This is similar to `clean_eval_str`, but is more efficient if the AST is already built up.
-    ///
-    /// Note: This should not be used in a Spore Native Function as it resets the evaluation.
-    pub fn clean_eval_ast<'a>(
-        &'a mut self,
-        s: &'a str,
-        ast: &Ast,
-    ) -> Result<Val, VmErrorWithContext<'a>> {
-        let mut inner = || -> VmResult<Val> {
-            self.stack.clear();
-            let bytecode =
-                ByteCodeFunction::with_module_source(self, s, std::iter::once(ast), &Bump::new())?;
+            let bytecode = ByteCodeFunction::with_module_source(self, s)?;
             let bytecode_id = self.objects.register_bytecode(bytecode);
             self.eval_function(
                 Val::BytecodeFunction {
@@ -542,7 +509,7 @@ mod tests {
                 .map_err(VmError::from)
                 .unwrap_err(),
             VmError::WrongArity {
-                function_name: "foo".into(),
+                function_name: "".into(),
                 expected: 3,
                 actual: 1
             }

@@ -1,7 +1,7 @@
 use compact_str::CompactString;
 
 use crate::{
-    compiler::{ast::AstError, error::CompileError},
+    compiler::{error::ParseOrCompileError, sexp::ParseError},
     val::{DataType, Val, identifier::IdentifierId},
     vm::Vm,
 };
@@ -12,7 +12,7 @@ pub type VmResult<T> = Result<T, VmError>;
 #[derive(Clone, Debug, PartialEq)]
 /// Represents errors that can occur during VM execution.
 pub enum VmError {
-    Compile(CompileError),
+    Compile(ParseOrCompileError),
     IdentifierNotFound(IdentifierId),
     NotCallable(Val),
     WrongType {
@@ -75,8 +75,8 @@ impl std::fmt::Display for VmError {
     }
 }
 
-impl From<CompileError> for VmError {
-    fn from(value: CompileError) -> Self {
+impl From<ParseOrCompileError> for VmError {
+    fn from(value: ParseOrCompileError) -> Self {
         VmError::Compile(value)
     }
 }
@@ -87,9 +87,9 @@ impl From<std::fmt::Error> for VmError {
     }
 }
 
-impl From<AstError> for VmError {
-    fn from(value: AstError) -> VmError {
-        VmError::from(CompileError::from(value))
+impl From<ParseError> for VmError {
+    fn from(value: ParseError) -> VmError {
+        VmError::from(ParseOrCompileError::from(value))
     }
 }
 
@@ -119,7 +119,7 @@ impl std::fmt::Display for VmErrorWithContext<'_> {
             VmError::Compile(err) => {
                 write!(f, "{}", err.with_context(self.source))
             }
-            VmError::IdentifierNotFound(symbol_id) => match self.vm.symbol_name(*symbol_id) {
+            VmError::IdentifierNotFound(symbol_id) => match self.vm.identifier_name(*symbol_id) {
                 Some(sym) => write!(f, "symbol {sym} not found"),
                 None => write!(f, "{}", self.err),
             },
